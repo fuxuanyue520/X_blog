@@ -1,0 +1,297 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { Icon } from "astro-icon/components";
+import { getAuthenticatedAdmin } from "@/lib/auth";
+import { AWARD_LEVELS, countAwards, getAwardById, listAwards, listAwardFilterOptions } from "@/lib/awards";
+
+export const prerender = false;
+
+const admin = await getAuthenticatedAdmin(Astro);
+
+if (!admin) {
+	return Astro.redirect("/?login=1");
+}
+
+const status = Astro.url.searchParams.get("status") ?? "";
+const code = Astro.url.searchParams.get("code") ?? "";
+const highlightId = Number(Astro.url.searchParams.get("highlight") ?? "");
+const editId = Number(Astro.url.searchParams.get("edit") ?? "");
+
+const statusMessages: Record<string, string> = {
+	created: "奖状已成功添加到荣誉墙。",
+	updated: "奖状信息已更新。",
+	deleted: "奖状已删除。",
+	invalid_award: "没有找到要操作的奖状记录。",
+	invalid_fields: "请完整填写标题、学校、年份和级别。",
+	invalid_level: "奖项级别不在允许范围内。",
+	invalid_image_type: "上传文件必须是图片格式。",
+	image_too_large: "图片体积不能超过 8MB。",
+	missing_image: "新增奖状时必须上传图片。",
+};
+
+const feedbackMessage = status === "error" ? statusMessages[code] : statusMessages[status];
+
+const [awards, editingAward, totalAwards, filterOptions] = await Promise.all([
+	listAwards(),
+	Number.isInteger(editId) && editId > 0 ? getAwardById(editId) : Promise.resolve(null),
+	countAwards(),
+	listAwardFilterOptions(),
+]);
+
+const isEditing = Boolean(editingAward);
+---
+
+<BaseLayout title="荣誉墙管理" description="后台管理奖状荣誉墙">
+	<section class="mx-auto max-w-7xl space-y-6">
+		<div class="rounded-3xl border border-white/10 bg-dark-800/80 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl">
+			<div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<p class="text-sm uppercase tracking-[0.35em] text-primary-400">Award Admin</p>
+					<h1 class="mt-3 text-3xl font-bold text-white">荣誉墙管理</h1>
+					<p class="mt-3 max-w-3xl text-sm leading-7 text-gray-400">
+						在这里维护你的奖状荣誉墙内容。支持上传图片、设置学校、年份、级别，并在前台按条件筛选展示。
+					</p>
+				</div>
+
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div class="rounded-2xl border border-white/10 bg-dark-900/70 px-5 py-4">
+						<p class="text-xs uppercase tracking-[0.25em] text-gray-500">Total Awards</p>
+						<p class="mt-2 text-3xl font-bold text-white">{totalAwards}</p>
+					</div>
+					<div class="rounded-2xl border border-white/10 bg-dark-900/70 px-5 py-4">
+						<p class="text-xs uppercase tracking-[0.25em] text-gray-500">Schools</p>
+						<p class="mt-2 text-3xl font-bold text-white">{filterOptions.schools.length}</p>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		{feedbackMessage && (
+			<div class:list={[
+				"rounded-2xl border px-5 py-4 text-sm",
+				status === "error"
+					? "border-red-500/30 bg-red-500/10 text-red-200"
+					: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+			]}>
+				{feedbackMessage}
+			</div>
+		)}
+
+		<div class="grid gap-6 xl:grid-cols-[1.1fr_1.4fr]">
+			<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-6">
+				<div class="mb-6 flex items-center justify-between gap-3">
+					<div>
+						<h2 class="text-2xl font-semibold text-white">{isEditing ? "编辑奖状" : "新增奖状"}</h2>
+						<p class="mt-2 text-sm text-gray-400">
+							{isEditing ? "更新当前奖状的图片和分类信息。" : "上传奖状图片，并配置展示信息。"}
+						</p>
+					</div>
+					{isEditing && (
+						<a
+							href="/admin/awards"
+							class="inline-flex items-center rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
+						>
+							取消编辑
+						</a>
+					)}
+				</div>
+
+				<form method="POST" action="/api/admin/awards/save" enctype="multipart/form-data" class="space-y-5">
+					{isEditing && <input type="hidden" name="id" value={editingAward?.id} />}
+
+					<div>
+						<label for="award-title" class="mb-2 block text-sm font-medium text-gray-200">标题</label>
+						<input
+							id="award-title"
+							name="title"
+							type="text"
+							required
+							value={editingAward?.title ?? ""}
+							class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+							placeholder="例如：全国大学生数学建模竞赛一等奖"
+						/>
+					</div>
+
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div>
+							<label for="award-school" class="mb-2 block text-sm font-medium text-gray-200">学校</label>
+							<input
+								id="award-school"
+								name="school"
+								type="text"
+								required
+								list="award-schools"
+								value={editingAward?.school ?? ""}
+								class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+								placeholder="例如：某某大学"
+							/>
+							<datalist id="award-schools">
+								{filterOptions.schools.map((school) => <option value={school} />)}
+							</datalist>
+						</div>
+
+						<div>
+							<label for="award-year" class="mb-2 block text-sm font-medium text-gray-200">年份</label>
+							<input
+								id="award-year"
+								name="awardYear"
+								type="number"
+								min="1900"
+								max="2100"
+								required
+								value={editingAward?.awardYear ?? new Date().getFullYear()}
+								class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+							/>
+						</div>
+					</div>
+
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div>
+							<label for="award-level" class="mb-2 block text-sm font-medium text-gray-200">级别</label>
+							<select
+								id="award-level"
+								name="awardLevel"
+								required
+								class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+							>
+								{AWARD_LEVELS.map((level) => (
+									<option value={level} selected={(editingAward?.awardLevel ?? "校级") === level}>{level}</option>
+								))}
+							</select>
+						</div>
+
+						<div>
+							<label for="award-sort-order" class="mb-2 block text-sm font-medium text-gray-200">排序</label>
+							<input
+								id="award-sort-order"
+								name="sortOrder"
+								type="number"
+								value={editingAward?.sortOrder ?? 0}
+								class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+								placeholder="数字越小越靠前"
+							/>
+						</div>
+					</div>
+
+					<div>
+						<label for="award-description" class="mb-2 block text-sm font-medium text-gray-200">说明</label>
+						<textarea
+							id="award-description"
+							name="description"
+							rows="4"
+							class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+							placeholder="补充说明这张奖状的背景或含义"
+						>{editingAward?.description ?? ""}</textarea>
+					</div>
+
+					<div>
+						<label for="award-image" class="mb-2 block text-sm font-medium text-gray-200">
+							图片 {isEditing ? "（如需更换再上传）" : ""}
+						</label>
+						<input
+							id="award-image"
+							name="image"
+							type="file"
+							accept="image/*"
+							required={!isEditing}
+							class="block w-full rounded-2xl border border-dashed border-white/15 bg-dark-900/60 px-4 py-3 text-sm text-gray-300 file:mr-4 file:rounded-full file:border-0 file:bg-primary-500/15 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-100"
+						/>
+						{isEditing && editingAward && (
+							<p class="mt-3 text-sm text-gray-400">
+								当前图片：
+								<a href={editingAward.imageUrl} target="_blank" class="text-primary-300 hover:text-primary-200">
+									{editingAward.imageName}
+								</a>
+							</p>
+						)}
+					</div>
+
+					<button
+						type="submit"
+						class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600"
+					>
+						<Icon name={isEditing ? "ri:save-line" : "ri:add-circle-line"} class="text-lg" />
+						{isEditing ? "保存修改" : "添加到荣誉墙"}
+					</button>
+				</form>
+			</div>
+
+			<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-6">
+				<div class="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+					<div>
+						<h2 class="text-2xl font-semibold text-white">已有奖状</h2>
+						<p class="mt-2 text-sm text-gray-400">支持直接编辑分类信息，也可以删除不再展示的记录。</p>
+					</div>
+					<div class="flex gap-3">
+						<a
+							href="/awards"
+							target="_blank"
+							class="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
+						>
+							<Icon name="ri:gallery-line" class="text-lg" />
+							查看前台
+						</a>
+					</div>
+				</div>
+
+				{awards.length > 0 ? (
+					<div class="space-y-4">
+						{awards.map((award) => (
+							<article
+								id={highlightId === award.id ? `award-${award.id}` : undefined}
+								class:list={[
+									"grid gap-4 rounded-3xl border border-white/10 bg-dark-900/60 p-4 md:grid-cols-[180px_1fr]",
+									highlightId === award.id ? "border-primary-400/50 shadow-[0_0_0_1px_rgba(34,211,238,0.3)]" : "",
+								]}
+							>
+								<div class="overflow-hidden rounded-2xl bg-dark-950">
+									<img src={award.imageUrl} alt={award.title} class="aspect-[4/3] h-full w-full object-cover" />
+								</div>
+								<div class="flex flex-col justify-between gap-4">
+									<div>
+										<div class="flex flex-wrap items-center gap-2">
+											<h3 class="text-xl font-semibold text-white">{award.title}</h3>
+											<span class="rounded-full border border-primary-500/30 bg-primary-500/10 px-3 py-1 text-xs text-primary-200">
+												{award.awardLevel}
+											</span>
+										</div>
+										<p class="mt-3 text-sm leading-7 text-gray-300">{award.description || "暂无补充说明。"}</p>
+									</div>
+									<div class="flex flex-wrap gap-2 text-sm">
+										<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1 text-gray-300">{award.school}</span>
+										<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1 text-gray-300">{award.awardYear} 年</span>
+										<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1 text-gray-300">排序 {award.sortOrder}</span>
+									</div>
+									<div class="flex flex-wrap gap-3">
+										<a
+											href={`/admin/awards?edit=${award.id}`}
+											class="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300"
+										>
+											<Icon name="ri:edit-line" class="text-lg" />
+											编辑
+										</a>
+										<form method="POST" action="/api/admin/awards/delete" onsubmit="return confirm('确定删除这条奖状记录吗？');">
+											<input type="hidden" name="id" value={award.id} />
+											<button
+												type="submit"
+												class="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:border-red-500/40 hover:bg-red-500/15"
+											>
+												<Icon name="ri:delete-bin-line" class="text-lg" />
+												删除
+											</button>
+										</form>
+									</div>
+								</div>
+							</article>
+						))}
+					</div>
+				) : (
+					<div class="rounded-3xl border border-dashed border-white/10 bg-dark-900/40 p-10 text-center">
+						<p class="text-lg font-medium text-white">还没有奖状记录</p>
+						<p class="mt-3 text-sm text-gray-400">先在左侧表单上传第一张奖状，前台荣誉墙就会同步展示。</p>
+					</div>
+				)}
+			</div>
+		</div>
+	</section>
+</BaseLayout>

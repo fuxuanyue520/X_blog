@@ -2,12 +2,18 @@
 ---
 
 <div class="relative w-full h-[40vh] md:h-[60vh] min-h-[300px] md:min-h-[400px] overflow-hidden mt-16 lg:mt-20 group" transition:persist>
-    <!-- Background Image -->
-    <div id="banner-bg" class="absolute inset-0 bg-cover bg-center transition-transform duration-1000 group-hover:scale-105" 
-         style="background-image: url('/images/background.jpg');">
-        <!-- Fallback for when image fails to load -->
+    <!-- Background Video -->
+    <div id="banner-bg" class="absolute inset-0 transition-transform duration-1000 group-hover:scale-105">
+        <video
+            class="absolute inset-0 w-full h-full object-cover"
+            autoplay
+            muted
+            loop
+            playsinline
+        >
+            <source src="/videos/background.mp4" type="video/mp4" />
+        </video>
         <div class="absolute inset-0 bg-gradient-to-br from-purple-900/20 to-blue-900/20"></div>
-        <!-- Overlay -->
         <div class="absolute inset-0 bg-gradient-to-b from-transparent via-dark-900/10 to-dark-900"></div>
     </div>
     

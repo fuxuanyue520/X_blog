@@ -1,0 +1,12 @@
+---
+import { getAuthenticatedAdmin } from "@/lib/auth";
+
+export const prerender = false;
+
+const admin = await getAuthenticatedAdmin(Astro);
+
+if (admin) {
+	return Astro.redirect("/admin");
+}
+return Astro.redirect("/?login=1");
+---

@@ -29,9 +29,17 @@ const { title, description = "秋兰以为佩的博客 - 技术与思考", showB
   </head>
   <body class="bg-dark-900 text-gray-200 min-h-screen flex flex-col font-sans selection:bg-primary-500/30 selection:text-primary-200 transition-colors duration-300">
     
-    <!-- Full Page Background Image -->
-    <div id="full-page-bg" class="fixed inset-0 z-[-2] bg-cover bg-center bg-no-repeat transition-opacity duration-500 opacity-0 pointer-events-none" 
-         style="background-image: url('/images/background.jpg');">
+    <!-- Full Page Background Video -->
+    <div id="full-page-bg" class="fixed inset-0 z-[-2] transition-opacity duration-500 opacity-0 pointer-events-none overflow-hidden">
+        <video
+          class="absolute inset-0 w-full h-full object-cover"
+          autoplay
+          muted
+          loop
+          playsinline
+        >
+          <source src="/videos/background.mp4" type="video/mp4" />
+        </video>
         <div class="absolute inset-0 bg-dark-900/70 backdrop-blur-[2px]"></div>
     </div>
 

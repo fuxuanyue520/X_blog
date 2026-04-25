@@ -7,6 +7,8 @@ import { Icon } from 'astro-icon/components';
 import type { GetStaticPaths, Page } from 'astro';
 import type { CollectionEntry } from 'astro:content';
 
+export const prerender = true;
+
 export const getStaticPaths = (async ({ paginate }) => {
   const posts = await getAllArticles();
   return paginate(posts, { pageSize: 5 });

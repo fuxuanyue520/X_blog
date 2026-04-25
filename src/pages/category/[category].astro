@@ -4,6 +4,8 @@ import ArticleCard from '../../components/ArticleCard.astro';
 import { getCollection } from 'astro:content';
 import { Icon } from 'astro-icon/components';
 
+export const prerender = true;
+
 export async function getStaticPaths() {
   const allPosts = await getCollection('posts');
   const uniqueCategories = [...new Set(allPosts.map(post => post.data.category))];

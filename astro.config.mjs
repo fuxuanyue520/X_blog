@@ -2,6 +2,7 @@ import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import tailwind from "@astrojs/tailwind";
 import mdx from "@astrojs/mdx";
+import netlify from "@astrojs/netlify";
 import icon from "astro-icon";
 import remarkDirective from "remark-directive";
 import { visit } from "unist-util-visit";
@@ -67,6 +68,8 @@ export default defineConfig({
 			},
 		}),
 	],
+	output: "server",
+	adapter: netlify(),
 	markdown: {
 		remarkPlugins: [remarkDirective, remarkAdmonitions],
 	},

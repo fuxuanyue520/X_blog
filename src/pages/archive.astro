@@ -4,6 +4,8 @@ import { getAllArticles } from '../utils/markdown';
 import { formatDate } from '../utils/date';
 import { Icon } from 'astro-icon/components';
 
+export const prerender = true;
+
 const posts = await getAllArticles({ ignorePinned: true });
 
 // Group by year
@@ -31,7 +33,7 @@ const categoryIconMap: Record<string, string> = {
 };
 ---
 
-<PageLayout title="归档 - 秋兰以为佩的博客">
+<PageLayout title="归档">
     <div class="bg-white dark:bg-dark-800 rounded-xl p-4 shadow-sm dark:shadow-lg border border-gray-100 dark:border-white/5">
         <h1 class="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
             <Icon name="ri:archive-line" class="text-primary-500" />

@@ -1,5 +1,18 @@
 ---
 import { Icon } from 'astro-icon/components';
+
+const currentUrl = new URL(Astro.url);
+currentUrl.searchParams.delete('login');
+currentUrl.searchParams.delete('error');
+const currentPathWithSearch = `${currentUrl.pathname}${currentUrl.search}`;
+const logoutRedirectTo = Astro.url.pathname.startsWith('/admin') ? '/' : currentPathWithSearch;
+const errorMessages: Record<string, string> = {
+  missing_fields: '请输入用户名和密码。',
+  invalid_credentials: '用户名或密码错误。',
+};
+const errorCode = Astro.url.searchParams.get('error') ?? '';
+const errorMessage = errorMessages[errorCode] ?? '';
+const shouldOpenLoginModal = Astro.url.searchParams.get('login') === '1' || Boolean(errorMessage);
 ---
 
 <nav class="fixed top-0 left-0 w-full h-16 lg:h-20 bg-dark-900/80 backdrop-blur-xl z-50 border-b border-white/5 transition-all duration-300" transition:persist>
@@ -21,6 +34,11 @@ import { Icon } from 'astro-icon/components';
             <span>主页</span>
             <span class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"></span>
           </a>
+          <a href="/awards" class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group">
+            <Icon name="ri:image-2-line" class="text-xl lg:text-2xl" />
+            <span>荣誉墙</span>
+            <span class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"></span>
+          </a>
           <a href="/archive" class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group">
             <Icon name="ri:archive-line" class="text-xl lg:text-2xl" />
             <span>归档</span>
@@ -31,32 +49,36 @@ import { Icon } from 'astro-icon/components';
             <span>关于</span>
             <span class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"></span>
           </a>
+          <a href="/admin" class="hidden text-base lg:text-lg font-medium text-primary-300 hover:text-primary-200 transition-colors items-center gap-2 relative group" data-auth-admin-link-desktop>
+            <Icon name="ri:shield-user-line" class="text-xl lg:text-2xl" />
+            <span>后台管理</span>
+            <span class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"></span>
+          </a>
         </div>
     </div>
 
-    <!-- Right Actions -->
-    <div class="flex items-center gap-4">
-      <!-- Wallpaper Toggle Button (Only visible on non-post pages) -->
-      {
-        !Astro.url.pathname.startsWith('/posts/') && (
-          <button id="wallpaper-toggle" class="relative group flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-all duration-300" aria-label="切换模式">
-            <div class="relative w-6 h-6 flex items-center justify-center">
-               <!-- Icon for Normal Mode (Click to enter Wallpaper Mode) - Shows "Landscape/View" -->
-               <Icon name="ri:landscape-line" id="icon-normal" class="absolute inset-0 w-full h-full text-gray-400 group-hover:text-primary-400 transition-all duration-300 transform scale-100 opacity-100" />
-               <!-- Icon for Wallpaper Mode (Click to exit Wallpaper Mode) - Shows "Article/Content" -->
-               <Icon name="ri:article-line" id="icon-wallpaper" class="absolute inset-0 w-full h-full text-primary-500 transition-all duration-300 transform scale-0 opacity-0" />
-            </div>
-            
-            <!-- Tooltip -->
-            <span id="wallpaper-tooltip" class="absolute top-full mt-2 right-0 bg-dark-800 border border-white/10 text-gray-200 text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none whitespace-nowrap shadow-xl backdrop-blur-md z-50">
-              进入沉浸模式
-            </span>
-          </button>
-        )
-      }
+    <div class="flex items-center gap-3">
+      <div class="hidden md:block">
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-full border border-primary-400/25 bg-dark-800/85 px-4 py-2 text-sm font-semibold text-primary-100 shadow-[0_8px_30px_rgba(8,145,178,0.12)] transition hover:border-primary-400/50 hover:bg-primary-500/10 hover:text-primary-200"
+          data-open-login-modal
+          data-auth-guest
+        >
+          <Icon name="ri:login-box-line" class="text-lg" />
+          <span>登录</span>
+        </button>
 
-      <!-- Mobile Menu Button -->
-      <button id="mobile-menu-btn" class="md:hidden text-gray-300 hover:text-primary-500 focus:outline-none p-1">
+        <form method="POST" action="/api/admin/logout" class="hidden" data-auth-logout-desktop>
+          <input type="hidden" name="redirectTo" value={logoutRedirectTo} />
+          <button type="submit" class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300">
+            <Icon name="ri:logout-box-r-line" class="text-lg" />
+            <span>退出</span>
+          </button>
+        </form>
+      </div>
+
+      <button id="mobile-menu-btn" class="md:hidden text-gray-300 hover:text-primary-500 focus:outline-none p-1" aria-label="打开菜单">
         <Icon name="ri:menu-4-line" class="text-2xl" id="menu-icon-open" />
         <Icon name="ri:close-line" class="text-2xl hidden" id="menu-icon-close" />
       </button>
@@ -73,32 +95,138 @@ import { Icon } from 'astro-icon/components';
         <Icon name="ri:archive-line" class="text-xl" />
         <span>归档</span>
       </a>
+      <a href="/awards" class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5">
+        <Icon name="ri:image-2-line" class="text-xl" />
+        <span>荣誉墙</span>
+      </a>
       <a href="/about" class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5">
         <Icon name="ri:user-smile-line" class="text-xl" />
         <span>关于</span>
       </a>
+      <button type="button" class="text-lg font-medium text-primary-200 hover:text-primary-100 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5" data-open-login-modal data-auth-guest>
+        <Icon name="ri:login-box-line" class="text-xl" />
+        <span>登录</span>
+      </button>
+      <a href="/admin" class="hidden text-lg font-medium text-primary-300 hover:text-primary-200 transition-colors items-center gap-3 w-full justify-center py-2 active:bg-white/5" data-auth-admin-link>
+        <Icon name="ri:shield-user-line" class="text-xl" />
+        <span>后台管理</span>
+      </a>
+      <form method="POST" action="/api/admin/logout" class="hidden w-full px-6" data-auth-admin-form>
+        <input type="hidden" name="redirectTo" value={logoutRedirectTo} />
+        <button type="submit" class="w-full text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 justify-center py-2 active:bg-white/5">
+          <Icon name="ri:logout-box-r-line" class="text-xl" />
+          <span>退出登录</span>
+        </button>
+      </form>
   </div>
 </nav>
+
+<div
+  id="login-modal"
+  data-open={shouldOpenLoginModal ? 'true' : 'false'}
+  class:list={[
+    'fixed inset-0 z-[70] flex items-center justify-center p-4',
+    { hidden: !shouldOpenLoginModal },
+  ]}
+>
+  <button
+    type="button"
+    class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
+    data-close-login-modal
+    aria-label="关闭登录弹窗"
+  ></button>
+
+  <div class="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-dark-800/95 p-8 shadow-2xl shadow-black/40">
+    <button
+      type="button"
+      class="absolute right-4 top-4 rounded-full p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
+      data-close-login-modal
+      aria-label="关闭"
+    >
+      <Icon name="ri:close-line" class="text-xl" />
+    </button>
+
+    <div class="mb-8 text-center">
+      <p class="mb-3 text-sm uppercase tracking-[0.35em] text-primary-400">Admin</p>
+      <h2 class="text-3xl font-bold text-white">管理员登录</h2>
+      <p class="mt-3 text-sm text-gray-400">
+        输入用户名和密码后即可获得后台管理权限。
+      </p>
+    </div>
+
+    {errorMessage && (
+      <div class="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        {errorMessage}
+      </div>
+    )}
+
+    <form method="POST" action="/api/admin/login" class="space-y-5">
+      <input type="hidden" name="redirectTo" value={currentPathWithSearch} />
+
+      <div>
+        <label for="nav-login-username" class="mb-2 block text-sm font-medium text-gray-200">
+          用户名
+        </label>
+        <input
+          id="nav-login-username"
+          name="username"
+          type="text"
+          autocomplete="username"
+          required
+          class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+          placeholder="请输入管理员用户名"
+        />
+      </div>
+
+      <div>
+        <label for="nav-login-password" class="mb-2 block text-sm font-medium text-gray-200">
+          密码
+        </label>
+        <input
+          id="nav-login-password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+          class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+          placeholder="请输入密码"
+        />
+      </div>
+
+      <button
+        type="submit"
+        class="w-full rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600"
+      >
+        登录
+      </button>
+    </form>
+  </div>
+</div>
 
 <script>
   // Runs on initial load and after every navigation
   document.addEventListener('astro:page-load', () => {
-    // Mobile Menu Logic
     const menuBtn = document.getElementById('mobile-menu-btn');
     const mobileMenu = document.getElementById('mobile-menu');
     const menuIconOpen = document.getElementById('menu-icon-open');
     const menuIconClose = document.getElementById('menu-icon-close');
+    const loginModal = document.getElementById('login-modal');
+    const openModalButtons = document.querySelectorAll('[data-open-login-modal]');
+    const closeModalButtons = document.querySelectorAll('[data-close-login-modal]');
+    const usernameInput = document.getElementById('nav-login-username');
+    const guestActions = document.querySelectorAll('[data-auth-guest]');
+    const adminDesktopLink = document.querySelector('[data-auth-admin-link-desktop]');
+    const adminDesktopLogout = document.querySelector('[data-auth-logout-desktop]');
+    const adminMobileLink = document.querySelector('[data-auth-admin-link]');
+    const adminMobileForm = document.querySelector('[data-auth-admin-form]');
     let isMenuOpen = false;
 
     if (menuBtn && mobileMenu && menuIconOpen && menuIconClose) {
-      // Reset state on page load
       isMenuOpen = false;
       mobileMenu.classList.add('-translate-y-[150%]');
       menuIconOpen.classList.remove('hidden');
       menuIconClose.classList.add('hidden');
 
-      // Remove any existing listeners to prevent duplicates if elements were cached but script reruns
-      // (Though with astro:page-load we usually get fresh elements or need to re-attach)
       const toggleMenu = () => {
         isMenuOpen = !isMenuOpen;
         if (isMenuOpen) {
@@ -111,58 +239,101 @@ import { Icon } from 'astro-icon/components';
           menuIconClose.classList.add('hidden');
         }
       };
-      
-      // Clean up old listener if we attach to a persisting element (nav persists)
-      // But button is inside nav...
-      menuBtn.onclick = toggleMenu; // Simple override
+
+      menuBtn.onclick = toggleMenu;
     }
 
-    // Wallpaper Toggle Logic
-    const wallpaperBtn = document.getElementById('wallpaper-toggle');
-    const iconNormal = document.getElementById('icon-normal');
-    const iconWallpaper = document.getElementById('icon-wallpaper');
-    const tooltip = document.getElementById('wallpaper-tooltip');
-    
-    if (wallpaperBtn && iconNormal && iconWallpaper) {
-      
-      const updateIconState = () => {
-        const isWallpaperMode = document.body.classList.contains('wallpaper-mode');
-        if (isWallpaperMode) {
-          // Show Wallpaper Icon (Active state - Click to exit)
-          iconNormal.classList.remove('scale-100', 'opacity-100');
-          iconNormal.classList.add('scale-0', 'opacity-0');
-          
-          iconWallpaper.classList.remove('scale-0', 'opacity-0');
-          iconWallpaper.classList.add('scale-100', 'opacity-100');
-          
-          // Update Tooltip
-          if (tooltip) tooltip.textContent = "退出沉浸模式";
-        } else {
-          // Show Normal Icon (Inactive state - Click to enter)
-          iconNormal.classList.remove('scale-0', 'opacity-0');
-          iconNormal.classList.add('scale-100', 'opacity-100');
-          
-          iconWallpaper.classList.remove('scale-100', 'opacity-100');
-          iconWallpaper.classList.add('scale-0', 'opacity-0');
-          
-          // Update Tooltip
-          if (tooltip) tooltip.textContent = "进入沉浸模式";
+    if (loginModal) {
+      const openModal = () => {
+        loginModal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        setTimeout(() => usernameInput?.focus(), 0);
+      };
+
+      const closeModal = () => {
+        loginModal.classList.add('hidden');
+        document.body.style.overflow = '';
+
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('login') || url.searchParams.has('error')) {
+          url.searchParams.delete('login');
+          url.searchParams.delete('error');
+          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
         }
       };
 
-      // Initial check
-      updateIconState();
+      if (loginModal.dataset.open === 'true') {
+        openModal();
+      }
 
-      // Click Handler
-      wallpaperBtn.onclick = () => {
-        document.dispatchEvent(new CustomEvent('toggle-wallpaper'));
-      };
-
-      // Observe Body Class Changes to update icon sync
-      const observer = new MutationObserver(() => {
-        updateIconState();
+      openModalButtons.forEach((button) => {
+        button.onclick = () => {
+          openModal();
+          if (mobileMenu) {
+            mobileMenu.classList.add('-translate-y-[150%]');
+          }
+          if (menuIconOpen && menuIconClose) {
+            menuIconOpen.classList.remove('hidden');
+            menuIconClose.classList.add('hidden');
+          }
+          isMenuOpen = false;
+        };
       });
-      observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+      closeModalButtons.forEach((button) => {
+        button.onclick = closeModal;
+      });
+
+      document.onkeydown = (event) => {
+        if (event.key === 'Escape' && !loginModal.classList.contains('hidden')) {
+          closeModal();
+        }
+      };
     }
+
+    fetch('/api/admin/session', {
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+      .then((response) => response.ok ? response.json() : null)
+      .then((session) => {
+        const authenticated = Boolean(session?.authenticated);
+
+        guestActions.forEach((element) => {
+          element.classList.toggle('hidden', authenticated);
+          if (element instanceof HTMLElement && element.classList.contains('md:inline-flex')) {
+            element.style.display = authenticated ? 'none' : '';
+          }
+        });
+
+        if (adminDesktopLink instanceof HTMLElement) {
+          adminDesktopLink.classList.toggle('hidden', !authenticated);
+          adminDesktopLink.classList.toggle('inline-flex', authenticated);
+        }
+
+        if (adminDesktopLogout instanceof HTMLElement) {
+          adminDesktopLogout.classList.toggle('hidden', !authenticated);
+          adminDesktopLogout.classList.toggle('block', authenticated);
+        }
+
+        if (adminMobileLink instanceof HTMLElement) {
+          adminMobileLink.classList.toggle('hidden', !authenticated);
+          adminMobileLink.classList.toggle('flex', authenticated);
+        }
+
+        if (adminMobileForm instanceof HTMLElement) {
+          adminMobileForm.classList.toggle('hidden', !authenticated);
+        }
+
+        if (authenticated && loginModal && !loginModal.classList.contains('hidden')) {
+          loginModal.classList.add('hidden');
+          document.body.style.overflow = '';
+        }
+      })
+      .catch(() => {
+        // Ignore session fetch failures and keep guest UI.
+      });
   });
 </script>

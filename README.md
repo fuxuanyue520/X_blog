@@ -65,7 +65,10 @@ npm install
 # 或者使用 pnpm
 # pnpm install
 
-# 3. 启动开发服务器
+# 3. 可选：配置数据库连接
+cp .env.example .env
+
+# 4. 启动开发服务器
 npm run dev
 # 访问 http://localhost:4321
 ```
@@ -74,8 +77,47 @@ npm run dev
 
 ```bash
 npm run build
-# 构建产物将输出到 dist/ 目录，可直接部署到任何静态托管服务 (Netlify, Vercel, GitHub Pages)
 ```
+
+构建产物将输出到 `dist/` 目录。
+
+> 当前项目已启用 Astro SSR 以支持后台登录，因此部署目标需要支持服务端运行能力。当前配置已接入 Netlify Adapter，也可按需切换到其他 Astro SSR 平台。
+
+## 🔐 后台管理系统
+
+项目现已内置一个最小可用的后台登录系统。
+
+- **登录地址**: `/admin/login`
+- **后台首页**: `/admin`
+- **默认用户名**: `admin`
+- **默认密码**: `admin123`
+
+### 密码与会话安全
+
+- 默认管理员账号会在首次启动时自动写入数据库
+- 密码不会明文保存，而是以带盐 `scrypt` 哈希形式存储
+- 登录成功后会写入 `HttpOnly` 会话 Cookie
+- 会话记录保存在数据库中的 `admin_sessions` 表
+
+### 数据库配置
+
+项目默认使用本地 SQLite 文件数据库，无需额外配置：
+
+- **默认数据库文件**: `data/admin.db`
+- **默认行为**: 应用启动时自动创建库表并初始化管理员账号
+
+如果你想改用 Turso / LibSQL 远程数据库，可在 `.env` 中配置：
+
+```env
+LIBSQL_URL=libsql://your-database.turso.io
+LIBSQL_AUTH_TOKEN=your-token
+```
+
+### 注意事项
+
+- 首次登录后，建议尽快把默认账号密码改成你自己的
+- `data/` 已加入 `.gitignore`，本地数据库文件不会被提交
+- 如果你部署到 Netlify，请在平台环境变量中配置 `LIBSQL_URL` 与 `LIBSQL_AUTH_TOKEN`
 
 ## ⚙️ 个性化配置指南
 
