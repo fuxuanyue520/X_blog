@@ -1,0 +1,60 @@
+---
+interface NavItem {
+	id: string;
+	label: string;
+	href: string;
+}
+
+interface Props {
+	activeSection: "awards" | "documents";
+}
+
+const { activeSection } = Astro.props;
+
+const navItems: NavItem[] = [
+	{
+		id: "documents",
+		label: "文档管理",
+		href: "/admin/documents",
+	},
+	{
+		id: "awards",
+		label: "荣誉管理",
+		href: "/admin/awards",
+	},
+];
+---
+
+<section class="w-full">
+	<div class="grid gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
+		<aside
+			class="h-fit rounded-3xl border border-white/10 bg-dark-800/80 p-4 shadow-2xl shadow-black/20 backdrop-blur-xl xl:sticky xl:top-24"
+		>
+			<nav class="space-y-3" aria-label="后台导航">
+				{
+					navItems.map((item) => {
+						const isActive = item.id === activeSection;
+
+						return (
+							<a
+								href={item.href}
+								class:list={[
+									"block rounded-2xl border px-4 py-3 text-sm font-medium transition",
+									isActive
+										? "border-primary-400/40 bg-primary-500/15 text-white shadow-[0_0_0_1px_rgba(34,211,238,0.18)]"
+										: "border-white/8 bg-dark-900/60 text-gray-300 hover:border-primary-400/30 hover:text-white",
+								]}
+							>
+								{item.label}
+							</a>
+						);
+					})
+				}
+			</nav>
+		</aside>
+
+		<div class="space-y-6">
+			<slot />
+		</div>
+	</div>
+</section>

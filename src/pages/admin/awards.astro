@@ -2,7 +2,15 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { Icon } from "astro-icon/components";
 import { getAuthenticatedAdmin } from "@/lib/auth";
-import { AWARD_LEVELS, countAwards, getAwardById, listAwards, listAwardFilterOptions } from "@/lib/awards";
+import {
+	AWARD_LEVELS,
+	HONOR_TYPES,
+	groupAwardsByType,
+	getAwardById,
+	listAwards,
+	listAwardFilterOptions,
+} from "@/lib/awards";
+import AdminShell from "@/components/admin/AdminShell.astro";
 
 export const prerender = false;
 
@@ -16,282 +24,2367 @@ const status = Astro.url.searchParams.get("status") ?? "";
 const code = Astro.url.searchParams.get("code") ?? "";
 const highlightId = Number(Astro.url.searchParams.get("highlight") ?? "");
 const editId = Number(Astro.url.searchParams.get("edit") ?? "");
+const keyword = Astro.url.searchParams.get("q")?.trim() ?? "";
+const selectedType = Astro.url.searchParams.get("type")?.trim() ?? "";
+const selectedYearValue = Astro.url.searchParams.get("year")?.trim() ?? "";
+const selectedLevel = Astro.url.searchParams.get("level")?.trim() ?? "";
+const selectedYear = selectedYearValue ? Number(selectedYearValue) : undefined;
 
 const statusMessages: Record<string, string> = {
-	created: "奖状已成功添加到荣誉墙。",
-	updated: "奖状信息已更新。",
-	deleted: "奖状已删除。",
-	invalid_award: "没有找到要操作的奖状记录。",
-	invalid_fields: "请完整填写标题、学校、年份和级别。",
-	invalid_level: "奖项级别不在允许范围内。",
-	invalid_image_type: "上传文件必须是图片格式。",
+	created: "荣誉记录已成功添加到荣誉墙。",
+	updated: "荣誉信息已更新。",
+	deleted: "荣誉记录已删除。",
+	invalid_award: "没有找到要操作的荣誉记录。",
+	invalid_fields: "请完整填写荣誉类型和年份。",
+	invalid_type: "荣誉类型不在允许范围内。",
+	invalid_level: "荣誉级别不在允许范围内。",
+	invalid_image_type: "上传文件必须是图片或 PDF 格式。",
 	image_too_large: "图片体积不能超过 8MB。",
-	missing_image: "新增奖状时必须上传图片。",
+	missing_image: "新增荣誉记录时必须上传图片或 PDF。",
 };
 
-const feedbackMessage = status === "error" ? statusMessages[code] : statusMessages[status];
+const feedbackMessage =
+	status === "error" ? statusMessages[code] : statusMessages[status];
+const toastVariant = status === "error" ? "error" : "success";
+const toastTitle =
+	status === "created"
+		? "新增成功"
+		: status === "updated"
+			? "保存成功"
+			: status === "deleted"
+				? "删除成功"
+				: status === "error"
+					? "操作失败"
+					: "操作成功";
+const toastDuration = status === "error" ? 4200 : 3200;
 
-const [awards, editingAward, totalAwards, filterOptions] = await Promise.all([
-	listAwards(),
-	Number.isInteger(editId) && editId > 0 ? getAwardById(editId) : Promise.resolve(null),
-	countAwards(),
+const activeFilters = {
+	keyword: keyword || undefined,
+	honorType: selectedType || undefined,
+	awardYear: Number.isInteger(selectedYear) ? selectedYear : undefined,
+	awardLevel: selectedLevel || undefined,
+};
+
+const [awards, editingAward, filterOptions] = await Promise.all([
+	listAwards(activeFilters),
+	Number.isInteger(editId) && editId > 0
+		? getAwardById(editId)
+		: Promise.resolve(null),
 	listAwardFilterOptions(),
 ]);
+const groupedAwards = groupAwardsByType(awards);
 
-const isEditing = Boolean(editingAward);
+const typeOptions = filterOptions.types.map((type) => ({
+	value: type,
+	label: type,
+}));
+
+const yearOptions = filterOptions.years.map((year) => ({
+	value: String(year),
+	label: `${year} 年`,
+}));
+
+const levelOptions = filterOptions.levels.map((level) => ({
+	value: level,
+	label: level,
+}));
+
+function getSelectedLabel(
+	options: Array<{ value: string; label: string }>,
+	value: string,
+	fallback: string,
+) {
+	return options.find((option) => option.value === value)?.label ?? fallback;
+}
+
+const shouldOpenEditModal = Boolean(editingAward);
+const shouldOpenCreateModal =
+	status === "error" && !shouldOpenEditModal && code !== "invalid_award";
+const currentYear = new Date().getFullYear();
 ---
 
-<BaseLayout title="荣誉墙管理" description="后台管理奖状荣誉墙">
-	<section class="mx-auto max-w-7xl space-y-6">
-		<div class="rounded-3xl border border-white/10 bg-dark-800/80 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl">
-			<div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+<BaseLayout title="荣誉墙管理" description="后台管理奖项、软著、专利与证书">
+	<AdminShell activeSection="awards">
+		{
+			feedbackMessage && (
+				<div
+					hidden
+					data-toast-source
+					data-toast-variant={toastVariant}
+					data-toast-title={toastTitle}
+					data-toast-duration={String(toastDuration)}
+				>
+					{feedbackMessage}
+				</div>
+			)
+		}
+
+		<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5">
+			<div
+				class="mb-4 flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between"
+			>
 				<div>
-					<p class="text-sm uppercase tracking-[0.35em] text-primary-400">Award Admin</p>
-					<h1 class="mt-3 text-3xl font-bold text-white">荣誉墙管理</h1>
-					<p class="mt-3 max-w-3xl text-sm leading-7 text-gray-400">
-						在这里维护你的奖状荣誉墙内容。支持上传图片、设置学校、年份、级别，并在前台按条件筛选展示。
-					</p>
+					<h2 class="text-xl font-semibold text-white md:text-2xl">荣誉列表</h2>
 				</div>
-
-				<div class="grid gap-3 sm:grid-cols-2">
-					<div class="rounded-2xl border border-white/10 bg-dark-900/70 px-5 py-4">
-						<p class="text-xs uppercase tracking-[0.25em] text-gray-500">Total Awards</p>
-						<p class="mt-2 text-3xl font-bold text-white">{totalAwards}</p>
-					</div>
-					<div class="rounded-2xl border border-white/10 bg-dark-900/70 px-5 py-4">
-						<p class="text-xs uppercase tracking-[0.25em] text-gray-500">Schools</p>
-						<p class="mt-2 text-3xl font-bold text-white">{filterOptions.schools.length}</p>
-					</div>
+				<div class="flex flex-wrap gap-3">
+					<button
+						type="button"
+						class="inline-flex min-h-[42px] items-center gap-2 rounded-xl bg-primary-500 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_24px_rgba(14,165,233,0.16)] transition hover:bg-primary-600 hover:shadow-[0_12px_28px_rgba(14,165,233,0.22)]"
+						data-open-award-modal="create"
+					>
+						<Icon name="ri:add-circle-line" class="text-lg" />
+						新建
+					</button>
 				</div>
 			</div>
-		</div>
 
-		{feedbackMessage && (
-			<div class:list={[
-				"rounded-2xl border px-5 py-4 text-sm",
-				status === "error"
-					? "border-red-500/30 bg-red-500/10 text-red-200"
-					: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
-			]}>
-				{feedbackMessage}
-			</div>
-		)}
-
-		<div class="grid gap-6 xl:grid-cols-[1.1fr_1.4fr]">
-			<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-6">
-				<div class="mb-6 flex items-center justify-between gap-3">
-					<div>
-						<h2 class="text-2xl font-semibold text-white">{isEditing ? "编辑奖状" : "新增奖状"}</h2>
-						<p class="mt-2 text-sm text-gray-400">
-							{isEditing ? "更新当前奖状的图片和分类信息。" : "上传奖状图片，并配置展示信息。"}
-						</p>
-					</div>
-					{isEditing && (
-						<a
-							href="/admin/awards"
-							class="inline-flex items-center rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
-						>
-							取消编辑
-						</a>
-					)}
-				</div>
-
-				<form method="POST" action="/api/admin/awards/save" enctype="multipart/form-data" class="space-y-5">
-					{isEditing && <input type="hidden" name="id" value={editingAward?.id} />}
-
-					<div>
-						<label for="award-title" class="mb-2 block text-sm font-medium text-gray-200">标题</label>
+			<form
+				action="/admin/awards"
+				method="GET"
+				data-admin-awards-filter-form
+				class="mb-4 space-y-2.5"
+			>
+				<div
+					class="grid items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto]"
+				>
+					<div class="relative">
 						<input
-							id="award-title"
-							name="title"
-							type="text"
-							required
-							value={editingAward?.title ?? ""}
-							class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-							placeholder="例如：全国大学生数学建模竞赛一等奖"
+							type="search"
+							name="q"
+							value={keyword}
+							placeholder="搜索标题、类型、级别、年份"
+							class="min-h-[48px] w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-2.5 text-sm text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
 						/>
 					</div>
-
-					<div class="grid gap-4 sm:grid-cols-2">
-						<div>
-							<label for="award-school" class="mb-2 block text-sm font-medium text-gray-200">学校</label>
-							<input
-								id="award-school"
-								name="school"
-								type="text"
-								required
-								list="award-schools"
-								value={editingAward?.school ?? ""}
-								class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-								placeholder="例如：某某大学"
-							/>
-							<datalist id="award-schools">
-								{filterOptions.schools.map((school) => <option value={school} />)}
-							</datalist>
-						</div>
-
-						<div>
-							<label for="award-year" class="mb-2 block text-sm font-medium text-gray-200">年份</label>
-							<input
-								id="award-year"
-								name="awardYear"
-								type="number"
-								min="1900"
-								max="2100"
-								required
-								value={editingAward?.awardYear ?? new Date().getFullYear()}
-								class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-							/>
-						</div>
-					</div>
-
-					<div class="grid gap-4 sm:grid-cols-2">
-						<div>
-							<label for="award-level" class="mb-2 block text-sm font-medium text-gray-200">级别</label>
-							<select
-								id="award-level"
-								name="awardLevel"
-								required
-								class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-							>
-								{AWARD_LEVELS.map((level) => (
-									<option value={level} selected={(editingAward?.awardLevel ?? "校级") === level}>{level}</option>
-								))}
-							</select>
-						</div>
-
-						<div>
-							<label for="award-sort-order" class="mb-2 block text-sm font-medium text-gray-200">排序</label>
-							<input
-								id="award-sort-order"
-								name="sortOrder"
-								type="number"
-								value={editingAward?.sortOrder ?? 0}
-								class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-								placeholder="数字越小越靠前"
-							/>
-						</div>
-					</div>
-
-					<div>
-						<label for="award-description" class="mb-2 block text-sm font-medium text-gray-200">说明</label>
-						<textarea
-							id="award-description"
-							name="description"
-							rows="4"
-							class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-							placeholder="补充说明这张奖状的背景或含义"
-						>{editingAward?.description ?? ""}</textarea>
-					</div>
-
-					<div>
-						<label for="award-image" class="mb-2 block text-sm font-medium text-gray-200">
-							图片 {isEditing ? "（如需更换再上传）" : ""}
-						</label>
-						<input
-							id="award-image"
-							name="image"
-							type="file"
-							accept="image/*"
-							required={!isEditing}
-							class="block w-full rounded-2xl border border-dashed border-white/15 bg-dark-900/60 px-4 py-3 text-sm text-gray-300 file:mr-4 file:rounded-full file:border-0 file:bg-primary-500/15 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-100"
-						/>
-						{isEditing && editingAward && (
-							<p class="mt-3 text-sm text-gray-400">
-								当前图片：
-								<a href={editingAward.imageUrl} target="_blank" class="text-primary-300 hover:text-primary-200">
-									{editingAward.imageName}
-								</a>
-							</p>
-						)}
-					</div>
-
 					<button
 						type="submit"
-						class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600"
+						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-600 sm:min-w-[112px]"
 					>
-						<Icon name={isEditing ? "ri:save-line" : "ri:add-circle-line"} class="text-lg" />
-						{isEditing ? "保存修改" : "添加到荣誉墙"}
+						搜索
 					</button>
+				</div>
+				<div
+					class="grid items-center gap-2.5 md:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_auto]"
+				>
+					<div
+						class="relative"
+						data-custom-select-root
+						data-select-submit-on-change="true"
+					>
+						<input
+							type="hidden"
+							name="type"
+							value={selectedType}
+							data-select-input
+						/>
+						<details class="custom-select">
+							<summary class="custom-select__trigger">
+								<span
+									class={`custom-select__label ${selectedType ? "is-selected" : ""}`}
+									data-select-label
+									data-placeholder="类型"
+									>{getSelectedLabel(typeOptions, selectedType, "类型")}</span
+								>
+								<Icon
+									name="ri:arrow-down-s-line"
+									class="custom-select__arrow"
+								/>
+							</summary>
+							<div class="custom-select__menu">
+								{
+									typeOptions.map((option) => (
+										<button
+											type="button"
+											class={`custom-select__option ${option.value === selectedType ? "is-active" : ""}`}
+											data-select-option
+											data-value={option.value}
+											data-label={option.label}
+										>
+											<span>{option.label}</span>
+											<span class="custom-select__check" aria-hidden="true" />
+										</button>
+									))
+								}
+							</div>
+						</details>
+					</div>
+					<div
+						class="relative"
+						data-custom-select-root
+						data-select-submit-on-change="true"
+					>
+						<input
+							type="hidden"
+							name="year"
+							value={selectedYearValue}
+							data-select-input
+						/>
+						<details class="custom-select">
+							<summary class="custom-select__trigger">
+								<span
+									class={`custom-select__label ${selectedYearValue ? "is-selected" : ""}`}
+									data-select-label
+									data-placeholder="年份"
+									>{
+										getSelectedLabel(yearOptions, selectedYearValue, "年份")
+									}</span
+								>
+								<Icon
+									name="ri:arrow-down-s-line"
+									class="custom-select__arrow"
+								/>
+							</summary>
+							<div class="custom-select__menu">
+								{
+									yearOptions.map((option) => (
+										<button
+											type="button"
+											class={`custom-select__option ${option.value === selectedYearValue ? "is-active" : ""}`}
+											data-select-option
+											data-value={option.value}
+											data-label={option.label}
+										>
+											<span>{option.label}</span>
+											<span class="custom-select__check" aria-hidden="true" />
+										</button>
+									))
+								}
+							</div>
+						</details>
+					</div>
+					<div
+						class="relative"
+						data-custom-select-root
+						data-select-submit-on-change="true"
+					>
+						<input
+							type="hidden"
+							name="level"
+							value={selectedLevel}
+							data-select-input
+						/>
+						<details class="custom-select">
+							<summary class="custom-select__trigger">
+								<span
+									class={`custom-select__label ${selectedLevel ? "is-selected" : ""}`}
+									data-select-label
+									data-placeholder="级别"
+									>{getSelectedLabel(levelOptions, selectedLevel, "级别")}</span
+								>
+								<Icon
+									name="ri:arrow-down-s-line"
+									class="custom-select__arrow"
+								/>
+							</summary>
+							<div class="custom-select__menu">
+								{
+									levelOptions.map((option) => (
+										<button
+											type="button"
+											class={`custom-select__option ${option.value === selectedLevel ? "is-active" : ""}`}
+											data-select-option
+											data-value={option.value}
+											data-label={option.label}
+										>
+											<span>{option.label}</span>
+											<span class="custom-select__check" aria-hidden="true" />
+										</button>
+									))
+								}
+							</div>
+						</details>
+					</div>
+					<a
+						href="/admin/awards"
+						data-admin-awards-clear
+						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/10 px-4 py-2.5 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300 xl:min-w-[112px]"
+					>
+						清空
+					</a>
+				</div>
+			</form>
+
+			<div data-admin-awards-results>
+				{
+					awards.length > 0 ? (
+						<div class="space-y-5">
+							{groupedAwards.map((group) => (
+								<section class="space-y-3">
+									<div class="flex items-center justify-between gap-3">
+										<h3 class="text-base font-semibold text-white md:text-lg">
+											{group.honorType}
+										</h3>
+										<span class="rounded-full border border-white/10 bg-dark-900/70 px-3 py-1 text-xs text-gray-400">
+											{group.items.length} 条
+										</span>
+									</div>
+									<div class="space-y-3">
+										{group.items.map((award) => (
+											<article
+												id={
+													highlightId === award.id
+														? `award-${award.id}`
+														: undefined
+												}
+												class:list={[
+													"grid gap-3 rounded-2xl border border-white/10 bg-dark-900/60 p-3 md:grid-cols-[104px_minmax(0,1fr)_auto] md:items-center",
+													highlightId === award.id
+														? "border-primary-400/50 shadow-[0_0_0_1px_rgba(34,211,238,0.3)]"
+														: "",
+												]}
+											>
+												<div class="overflow-hidden rounded-xl bg-dark-950">
+													<img
+														src={award.imageUrl}
+														alt={award.title}
+														class="h-24 w-full object-cover"
+													/>
+												</div>
+												<div class="min-w-0 space-y-2">
+													<h4 class="truncate text-lg font-semibold text-white">
+														{award.title}
+													</h4>
+													<div class="flex flex-wrap items-center gap-2 text-xs text-gray-300">
+														<span class="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-200">
+															{award.honorType}
+														</span>
+														{award.awardLevel && (
+															<span class="rounded-full border border-primary-500/30 bg-primary-500/10 px-2.5 py-1 text-primary-200">
+																{award.awardLevel}
+															</span>
+														)}
+														<span class="rounded-full border border-white/10 bg-dark-800 px-2.5 py-1 text-gray-300">
+															{award.awardYear} 年
+														</span>
+													</div>
+												</div>
+												<div class="flex flex-wrap gap-2 md:flex-col md:items-end">
+													<button
+														type="button"
+														class="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300 md:min-w-[84px]"
+														data-open-award-modal="edit"
+														data-award-id={award.id}
+														data-award-type={award.honorType}
+														data-award-competition-name={award.competitionName}
+														data-award-name={award.awardName}
+														data-award-year={award.awardYear}
+														data-award-level={award.awardLevel}
+														data-award-image-name={award.imageName}
+														data-award-image-url={award.imageUrl}
+													>
+														<Icon name="ri:edit-line" class="text-base" />
+														编辑
+													</button>
+													<form method="POST" action="/api/admin/awards/delete">
+														<input type="hidden" name="id" value={award.id} />
+														<button
+															type="button"
+															class="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition hover:border-red-500/40 hover:bg-red-500/15 md:min-w-[84px]"
+															data-open-delete-modal
+															data-award-title={award.title}
+														>
+															<Icon
+																name="ri:delete-bin-line"
+																class="text-base"
+															/>
+															删除
+														</button>
+													</form>
+												</div>
+											</article>
+										))}
+									</div>
+								</section>
+							))}
+						</div>
+					) : (
+						<div class="rounded-3xl border border-dashed border-white/10 bg-dark-900/40 p-8 text-center">
+							<p class="text-lg font-medium text-white">
+								当前条件下还没有荣誉记录
+							</p>
+							<p class="mt-3 text-sm text-gray-400">
+								可以换一个筛选条件试试，或者点击右上角“新建”新增一条记录。
+							</p>
+						</div>
+					)
+				}
+			</div>
+		</div>
+
+		<div
+			id="award-modal"
+			data-open={shouldOpenEditModal || shouldOpenCreateModal
+				? "true"
+				: "false"}
+			data-initial-award={editingAward ? JSON.stringify(editingAward) : ""}
+			data-should-open-edit={shouldOpenEditModal ? "true" : "false"}
+			data-should-open-create={shouldOpenCreateModal ? "true" : "false"}
+			data-current-year={String(currentYear)}
+			class:list={[
+				"fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto px-3 py-6 sm:px-5 sm:py-8",
+				{ hidden: !(shouldOpenEditModal || shouldOpenCreateModal) },
+			]}
+		>
+			<button
+				type="button"
+				class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
+				data-close-award-modal
+				aria-label="关闭弹窗"></button>
+
+			<div
+				class="relative z-10 my-auto flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-white/10 bg-dark-800/95 shadow-2xl shadow-black/40 sm:max-h-[calc(100vh-4rem)]"
+			>
+				<div
+					class="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3 md:px-6"
+				>
+					<div>
+						<p
+							id="award-modal-tag"
+							class="text-sm uppercase tracking-[0.35em] text-primary-400"
+						>
+							Honor
+						</p>
+						<h2
+							id="award-modal-title"
+							class="mt-3 text-2xl font-semibold text-white"
+						>
+							新建
+						</h2>
+						<p id="award-modal-description" class="mt-2 text-sm text-gray-400">
+							上传荣誉图片或 PDF，并配置展示信息。
+						</p>
+					</div>
+					<button
+						type="button"
+						class="rounded-full p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
+						data-close-award-modal
+						aria-label="关闭"
+					>
+						<Icon name="ri:close-line" class="text-xl" />
+					</button>
+				</div>
+
+				<form
+					id="award-form"
+					method="POST"
+					action="/api/admin/awards/save"
+					enctype="multipart/form-data"
+					class="flex min-h-0 flex-1 flex-col"
+				>
+					<input id="award-id" type="hidden" name="id" />
+					<div
+						class="panel-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4 pt-3 md:px-6 md:pb-4 md:pt-4"
+					>
+						<div class="award-form__row award-form__row--primary">
+							<div>
+								<label for="award-competition-name" class="award-form__label">
+									名称
+								</label>
+								<input
+									id="award-competition-name"
+									name="competitionName"
+									type="text"
+									class="award-form__control"
+									placeholder="例如：全国大学生数学建模竞赛"
+								/>
+							</div>
+
+							<div>
+								<label for="award-name" class="award-form__label">
+									名次（可选）
+								</label>
+								<input
+									id="award-name"
+									name="awardName"
+									type="text"
+									class="award-form__control"
+									placeholder="例如：一等奖"
+								/>
+							</div>
+						</div>
+
+						<div class="award-form__row award-form__row--meta">
+							<div
+								class="relative award-form__field--compact"
+								data-custom-select-root
+								data-select-submit-on-change="false"
+							>
+								<label for="award-type" class="award-form__label">类型</label>
+								<input
+									id="award-type"
+									name="honorType"
+									type="hidden"
+									value="奖项"
+									data-select-input
+								/>
+								<details class="custom-select award-form__select">
+									<summary class="custom-select__trigger">
+										<span
+											class="custom-select__label is-selected"
+											data-select-label
+											data-placeholder="类型">奖项</span
+										>
+										<Icon
+											name="ri:arrow-down-s-line"
+											class="custom-select__arrow"
+										/>
+									</summary>
+									<div class="custom-select__menu">
+										{
+											HONOR_TYPES.map((type, index) => (
+												<button
+													type="button"
+													class={`custom-select__option ${index === 0 ? "is-active" : ""}`}
+													data-select-option
+													data-value={type}
+													data-label={type}
+												>
+													<span>{type}</span>
+													<span
+														class="custom-select__check"
+														aria-hidden="true"
+													/>
+												</button>
+											))
+										}
+									</div>
+								</details>
+							</div>
+
+							<div class="award-form__field--compact">
+								<label for="award-year" class="award-form__label">年份</label>
+								<input
+									id="award-year"
+									name="awardYear"
+									type="text"
+									inputmode="numeric"
+									required
+									class="award-form__control"
+									placeholder="例如：2025"
+								/>
+							</div>
+						</div>
+
+						<div class="award-form__row award-form__row--support">
+							<div
+								class="relative award-form__field--compact"
+								data-custom-select-root
+								data-select-submit-on-change="false"
+							>
+								<label for="award-level" class="award-form__label"
+									>级别（可选）</label
+								>
+								<input
+									id="award-level"
+									name="awardLevel"
+									type="hidden"
+									value=""
+									data-select-input
+								/>
+								<details class="custom-select award-form__select">
+									<summary class="custom-select__trigger">
+										<span
+											class="custom-select__label"
+											data-select-label
+											data-placeholder="级别">级别</span
+										>
+										<Icon
+											name="ri:arrow-down-s-line"
+											class="custom-select__arrow"
+										/>
+									</summary>
+									<div class="custom-select__menu">
+										<button
+											type="button"
+											class="custom-select__option is-active"
+											data-select-option
+											data-value=""
+											data-label="级别"
+										>
+											<span>不填写</span>
+											<span class="custom-select__check" aria-hidden="true"
+											></span>
+										</button>
+										{
+											AWARD_LEVELS.map((level, index) => (
+												<button
+													type="button"
+													class="custom-select__option"
+													data-select-option
+													data-value={level}
+													data-label={level}
+												>
+													<span>{level}</span>
+													<span
+														class="custom-select__check"
+														aria-hidden="true"
+													/>
+												</button>
+											))
+										}
+									</div>
+								</details>
+							</div>
+							<div>
+								<label
+									id="award-image-label"
+									for="award-image"
+									class="award-form__label"
+								>
+									图片
+								</label>
+								<input
+									id="award-image"
+									name="image"
+									type="file"
+									accept="image/*,.pdf,application/pdf"
+									class="award-form__control award-form__upload"
+								/>
+								<p
+									id="award-image-hint"
+									class="mt-3 hidden text-sm text-gray-400"
+								>
+									当前图片：
+									<a
+										id="award-image-link"
+										href="#"
+										target="_blank"
+										class="text-primary-300 hover:text-primary-200"></a>
+								</p>
+							</div>
+						</div>
+
+						<div>
+							<label for="award-ocr-text" class="award-form__label">
+								OCR 原文
+							</label>
+							<textarea
+								id="award-ocr-text"
+								rows="4"
+								readonly
+								class="panel-scrollbar award-form__textarea h-28 w-full resize-none text-sm leading-6 text-gray-300 outline-none transition-[border-color,background-image,color] duration-300"
+								placeholder="上传荣誉图片或 PDF 后，这里会展示 OCR 提取出的完整文本。"
+							></textarea>
+						</div>
+					</div>
+
+					<div
+						class="shrink-0 border-t border-white/10 bg-dark-900/40 px-4 py-3 md:px-6"
+					>
+						<button
+							id="award-submit-button"
+							type="submit"
+							class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600"
+						>
+							<Icon
+								id="award-submit-icon"
+								name="ri:add-circle-line"
+								class="text-lg"
+							/>
+							<span id="award-submit-text">新建</span>
+						</button>
+					</div>
 				</form>
 			</div>
+		</div>
 
-			<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-6">
-				<div class="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-					<div>
-						<h2 class="text-2xl font-semibold text-white">已有奖状</h2>
-						<p class="mt-2 text-sm text-gray-400">支持直接编辑分类信息，也可以删除不再展示的记录。</p>
+		<div
+			id="award-delete-modal"
+			class="fixed inset-0 z-[210] hidden items-center justify-center p-4"
+		>
+			<button
+				type="button"
+				class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
+				data-close-delete-modal
+				aria-label="关闭删除确认"></button>
+
+			<div
+				class="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-dark-800/95 p-6 shadow-2xl shadow-black/40"
+			>
+				<div class="flex items-start gap-4">
+					<div
+						class="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/10 text-red-300"
+					>
+						<Icon name="ri:delete-bin-line" class="text-xl" />
 					</div>
-					<div class="flex gap-3">
-						<a
-							href="/awards"
-							target="_blank"
-							class="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
-						>
-							<Icon name="ri:gallery-line" class="text-lg" />
-							查看前台
-						</a>
+					<div class="flex-1">
+						<h2 class="text-xl font-semibold text-white">确认删除</h2>
+						<p class="mt-2 text-sm leading-6 text-gray-400">
+							删除后将无法恢复，请确认是否删除
+							<span id="delete-award-name" class="text-gray-200"></span>
+							。
+						</p>
 					</div>
 				</div>
 
-				{awards.length > 0 ? (
-					<div class="space-y-4">
-						{awards.map((award) => (
-							<article
-								id={highlightId === award.id ? `award-${award.id}` : undefined}
-								class:list={[
-									"grid gap-4 rounded-3xl border border-white/10 bg-dark-900/60 p-4 md:grid-cols-[180px_1fr]",
-									highlightId === award.id ? "border-primary-400/50 shadow-[0_0_0_1px_rgba(34,211,238,0.3)]" : "",
-								]}
-							>
-								<div class="overflow-hidden rounded-2xl bg-dark-950">
-									<img src={award.imageUrl} alt={award.title} class="aspect-[4/3] h-full w-full object-cover" />
-								</div>
-								<div class="flex flex-col justify-between gap-4">
-									<div>
-										<div class="flex flex-wrap items-center gap-2">
-											<h3 class="text-xl font-semibold text-white">{award.title}</h3>
-											<span class="rounded-full border border-primary-500/30 bg-primary-500/10 px-3 py-1 text-xs text-primary-200">
-												{award.awardLevel}
-											</span>
-										</div>
-										<p class="mt-3 text-sm leading-7 text-gray-300">{award.description || "暂无补充说明。"}</p>
-									</div>
-									<div class="flex flex-wrap gap-2 text-sm">
-										<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1 text-gray-300">{award.school}</span>
-										<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1 text-gray-300">{award.awardYear} 年</span>
-										<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1 text-gray-300">排序 {award.sortOrder}</span>
-									</div>
-									<div class="flex flex-wrap gap-3">
-										<a
-											href={`/admin/awards?edit=${award.id}`}
-											class="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300"
-										>
-											<Icon name="ri:edit-line" class="text-lg" />
-											编辑
-										</a>
-										<form method="POST" action="/api/admin/awards/delete" onsubmit="return confirm('确定删除这条奖状记录吗？');">
-											<input type="hidden" name="id" value={award.id} />
-											<button
-												type="submit"
-												class="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:border-red-500/40 hover:bg-red-500/15"
-											>
-												<Icon name="ri:delete-bin-line" class="text-lg" />
-												删除
-											</button>
-										</form>
-									</div>
-								</div>
-							</article>
-						))}
-					</div>
-				) : (
-					<div class="rounded-3xl border border-dashed border-white/10 bg-dark-900/40 p-10 text-center">
-						<p class="text-lg font-medium text-white">还没有奖状记录</p>
-						<p class="mt-3 text-sm text-gray-400">先在左侧表单上传第一张奖状，前台荣誉墙就会同步展示。</p>
-					</div>
-				)}
+				<div class="mt-6 flex justify-end gap-3">
+					<button
+						type="button"
+						class="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
+						data-close-delete-modal
+					>
+						取消
+					</button>
+					<button
+						id="confirm-delete-button"
+						type="button"
+						class="rounded-2xl bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600"
+					>
+						确定删除
+					</button>
+				</div>
 			</div>
 		</div>
-	</section>
+	</AdminShell>
 </BaseLayout>
+
+<style>
+	.award-form__row {
+		display: grid;
+		gap: 1rem;
+		align-items: start;
+	}
+
+	.award-form__label {
+		margin-bottom: 0.5rem;
+		display: block;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: rgb(229 231 235);
+	}
+
+	.award-form__control,
+	.award-form__textarea {
+		width: 100%;
+		border-radius: 1rem;
+		border: 1px solid rgb(255 255 255 / 0.1);
+		background: rgb(15 23 42 / 0.8);
+		padding: 0.875rem 1rem;
+		color: rgb(243 244 246);
+		transition:
+			border-color 0.2s ease,
+			box-shadow 0.2s ease,
+			background-color 0.2s ease;
+	}
+
+	.award-form__control {
+		min-height: 52px;
+	}
+
+	.award-form__control:focus,
+	.award-form__textarea:focus {
+		border-color: rgb(96 165 250 / 0.5);
+		box-shadow: 0 0 0 4px rgb(59 130 246 / 0.12);
+	}
+
+	.award-form__upload {
+		display: block;
+		min-height: 52px;
+		border-color: rgb(255 255 255 / 0.1);
+		background: rgb(15 23 42 / 0.8);
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+		font-size: 0.875rem;
+		color: rgb(209 213 219);
+	}
+
+	.award-form__upload::file-selector-button {
+		margin-right: 0.85rem;
+		border: 0;
+		border-radius: 9999px;
+		background: rgb(59 130 246 / 0.14);
+		padding: 0.5rem 0.95rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: rgb(224 242 254);
+		cursor: pointer;
+	}
+
+	.award-form__textarea {
+		background: rgb(15 23 42 / 0.8);
+	}
+
+	.custom-select {
+		position: relative;
+	}
+
+	.custom-select > summary {
+		list-style: none;
+	}
+
+	.custom-select > summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.custom-select__trigger {
+		display: flex;
+		min-height: 52px;
+		align-items: center;
+		justify-content: space-between;
+		gap: 14px;
+		border-radius: 1rem;
+		border: 1px solid rgb(255 255 255 / 0.1);
+		background: linear-gradient(
+			180deg,
+			rgb(42 48 64 / 0.95),
+			rgb(35 41 55 / 0.95)
+		);
+		padding: 0.85rem 1rem;
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: rgb(243 244 246);
+		cursor: pointer;
+		transition:
+			border-color 0.2s ease,
+			box-shadow 0.2s ease,
+			background-color 0.2s ease,
+			transform 0.2s ease;
+		user-select: none;
+	}
+
+	.award-form__select .custom-select__trigger {
+		background: rgb(15 23 42 / 0.8);
+		padding: 0.875rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+	}
+
+	.custom-select[open] .custom-select__trigger,
+	.custom-select__trigger:hover {
+		border-color: rgb(96 165 250 / 0.45);
+		background: rgb(45 55 72 / 0.95);
+		box-shadow:
+			0 12px 28px rgb(2 6 23 / 0.22),
+			0 0 0 4px rgb(59 130 246 / 0.12);
+	}
+
+	.award-form__select[open] .custom-select__trigger,
+	.award-form__select .custom-select__trigger:hover {
+		background: rgb(17 24 39 / 0.92);
+	}
+
+	.custom-select__label {
+		color: rgb(156 163 175);
+	}
+
+	.custom-select__label.is-selected {
+		color: rgb(243 244 246);
+	}
+
+	.custom-select__arrow {
+		flex-shrink: 0;
+		font-size: 1.25rem;
+		color: rgb(156 163 175);
+		transition:
+			transform 0.2s ease,
+			color 0.2s ease;
+	}
+
+	.custom-select[open] .custom-select__arrow {
+		transform: rotate(180deg);
+		color: rgb(147 197 253);
+	}
+
+	.custom-select__menu {
+		position: absolute;
+		top: calc(100% + 0.35rem);
+		left: 0;
+		right: 0;
+		z-index: 30;
+		max-height: 320px;
+		min-width: 100%;
+		overflow-y: auto;
+		border-radius: 1rem;
+		border: 1px solid rgb(255 255 255 / 0.08);
+		background: rgb(31 41 55 / 0.98);
+		padding: 0.45rem;
+		box-shadow: 0 18px 45px rgb(2 6 23 / 0.45);
+		backdrop-filter: blur(12px);
+		animation: select-menu-in 0.16s ease-out;
+	}
+
+	.custom-select__option {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border: 0;
+		border-radius: 0.8rem;
+		background: transparent;
+		padding: 0.85rem 0.95rem;
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: rgb(209 213 219);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color 0.18s ease,
+			color 0.18s ease,
+			transform 0.18s ease;
+	}
+
+	.custom-select__option:hover,
+	.custom-select__option.is-active {
+		background: rgb(59 130 246 / 0.12);
+		color: rgb(191 219 254);
+		transform: translateX(2px);
+	}
+
+	.custom-select__check {
+		height: 0.75rem;
+		width: 0.75rem;
+		flex-shrink: 0;
+		border-radius: 9999px;
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px rgb(100 116 139);
+		transition:
+			background-color 0.18s ease,
+			box-shadow 0.18s ease,
+			transform 0.18s ease;
+	}
+
+	.custom-select__option.is-active .custom-select__check {
+		background: rgb(96 165 250);
+		box-shadow: inset 0 0 0 2px rgb(30 41 59);
+		transform: scale(1.05);
+	}
+
+	@keyframes select-menu-in {
+		from {
+			opacity: 0;
+			transform: translateY(-6px) scale(0.98);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
+	}
+
+	:global(.notification-stack) {
+		position: fixed;
+		top: 5rem;
+		right: 1rem;
+		z-index: 120;
+		display: flex;
+		width: min(calc(100vw - 2rem), 24rem);
+		flex-direction: column;
+		gap: 0.85rem;
+		pointer-events: none;
+	}
+
+	@media (min-width: 768px) {
+		:global(.notification-stack) {
+			top: 6rem;
+		}
+	}
+
+	:global(.notification) {
+		position: relative;
+		overflow: hidden;
+		border-radius: 1.15rem;
+		border: 1px solid rgb(255 255 255 / 0.12);
+		padding: 1rem 1rem 0.95rem;
+		box-shadow:
+			0 20px 45px rgb(2 6 23 / 0.28),
+			0 8px 18px rgb(15 23 42 / 0.18);
+		backdrop-filter: blur(14px);
+		pointer-events: auto;
+		opacity: 0;
+		transform: translate3d(0, -14px, 0) scale(0.96);
+	}
+
+	:global(.notification.is-entering) {
+		animation: notification-in 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+	}
+
+	:global(.notification.is-leaving) {
+		animation: notification-out 0.28s ease forwards;
+	}
+
+	:global(.notification--success) {
+		background:
+			radial-gradient(
+				circle at top right,
+				rgb(74 222 128 / 0.22),
+				transparent 42%
+			),
+			linear-gradient(180deg, rgb(22 101 52 / 0.96), rgb(20 83 45 / 0.96));
+		color: rgb(240 253 244);
+	}
+
+	:global(.notification--error) {
+		background:
+			radial-gradient(
+				circle at top right,
+				rgb(248 113 113 / 0.22),
+				transparent 42%
+			),
+			linear-gradient(180deg, rgb(153 27 27 / 0.96), rgb(127 29 29 / 0.96));
+		color: rgb(254 242 242);
+	}
+
+	:global(.notification__glow) {
+		position: absolute;
+		inset: -35% auto auto 68%;
+		height: 7rem;
+		width: 7rem;
+		border-radius: 9999px;
+		background: rgb(255 255 255 / 0.12);
+		filter: blur(18px);
+		pointer-events: none;
+	}
+
+	:global(.notification__row) {
+		position: relative;
+		display: flex;
+		align-items: flex-start;
+		gap: 0.85rem;
+	}
+
+	:global(.notification__icon) {
+		display: inline-flex;
+		height: 2.25rem;
+		width: 2.25rem;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border-radius: 9999px;
+		border: 1px solid rgb(255 255 255 / 0.15);
+		background: rgb(255 255 255 / 0.1);
+		box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+	}
+
+	:global(.notification__icon svg) {
+		height: 1.1rem;
+		width: 1.1rem;
+	}
+
+	:global(.notification__content) {
+		min-width: 0;
+		flex: 1;
+	}
+
+	:global(.notification__title) {
+		font-size: 0.95rem;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+	}
+
+	:global(.notification__message) {
+		margin-top: 0.25rem;
+		font-size: 0.875rem;
+		line-height: 1.55;
+		color: rgb(255 255 255 / 0.9);
+		word-break: break-word;
+	}
+
+	:global(.notification__close) {
+		display: inline-flex;
+		height: 2rem;
+		width: 2rem;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border: 0;
+		border-radius: 9999px;
+		background: rgb(255 255 255 / 0.08);
+		color: inherit;
+		cursor: pointer;
+		transition:
+			background-color 0.18s ease,
+			transform 0.18s ease;
+	}
+
+	:global(.notification__close:hover) {
+		background: rgb(255 255 255 / 0.16);
+		transform: scale(1.04);
+	}
+
+	:global(.notification__progress) {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 3px;
+		background: rgb(255 255 255 / 0.18);
+		transform-origin: left center;
+		animation: notification-progress linear forwards;
+		animation-duration: var(--toast-duration, 3000ms);
+	}
+
+	@keyframes notification-in {
+		0% {
+			opacity: 0;
+			transform: translate3d(0, -14px, 0) scale(0.96);
+		}
+		65% {
+			opacity: 1;
+			transform: translate3d(0, 4px, 0) scale(1.01);
+		}
+		100% {
+			opacity: 1;
+			transform: translate3d(0, 0, 0) scale(1);
+		}
+	}
+
+	@keyframes notification-out {
+		0% {
+			opacity: 1;
+			transform: translate3d(0, 0, 0) scale(1);
+		}
+		100% {
+			opacity: 0;
+			transform: translate3d(0, -10px, 0) scale(0.97);
+		}
+	}
+
+	@keyframes notification-progress {
+		from {
+			transform: scaleX(1);
+		}
+		to {
+			transform: scaleX(0);
+		}
+	}
+
+	@media (min-width: 640px) {
+		.award-form__row--primary {
+			grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.9fr);
+		}
+
+		.award-form__row--meta {
+			grid-template-columns: minmax(160px, 0.8fr) minmax(140px, 0.55fr);
+		}
+
+		.award-form__row--support {
+			grid-template-columns: minmax(150px, 0.7fr) minmax(0, 1.3fr);
+		}
+	}
+</style>
+
+<script>
+	function normalizePlainText(value) {
+		return value.replace(/\s+/g, " ").trim();
+	}
+
+	function normalizeCompactText(value) {
+		return value.replace(/\s+/g, "");
+	}
+
+	function normalizeCompetitionName(value) {
+		return value
+			.replace(/^(在|于)/u, "")
+			.replace(/^(?:19|20)\d{2}年/u, "")
+			.replace(/^(?:\d{4}[./-]\d{1,2}[./-]\d{1,2})/u, "")
+			.replace(/(荣获|获得|取得|获评|被评为).*$/u, "")
+			.replace(/^(?:我校学生?|学生?)在/u, "")
+			.replace(/^(?:学校|院校|项目|作品|团队|队伍)[:：]/u, "")
+			.replace(/[，。；：:,]+$/u, "")
+			.trim();
+	}
+
+	function isLikelySchoolLine(line, competitionKeywords) {
+		if (/^(学校|院校)[:：]/u.test(line)) {
+			return true;
+		}
+
+		return (
+			/(大学|学院|学校|中学|小学|幼儿园|职业技术|实验学校)/u.test(line) &&
+			!competitionKeywords.test(line)
+		);
+	}
+
+	function uniqueValues(values) {
+		return [...new Set(values.filter(Boolean))];
+	}
+
+	function getOcrLines(texts) {
+		return uniqueValues(
+			texts.flatMap((text) =>
+				text
+					.replace(/\r/g, "")
+					.split(/\n+/)
+					.map((line) => normalizePlainText(line))
+					.filter(Boolean),
+			),
+		);
+	}
+
+	function buildOcrRawText(texts) {
+		const mergedLines = [];
+		const seen = new Set();
+
+		for (const text of texts) {
+			const lines = String(text ?? "")
+				.replace(/\r/g, "")
+				.split(/\n+/)
+				.map((line) => normalizePlainText(line))
+				.filter(Boolean);
+
+			for (const line of lines) {
+				if (seen.has(line)) {
+					continue;
+				}
+				seen.add(line);
+				mergedLines.push(line);
+			}
+		}
+
+		return mergedLines.join("\n");
+	}
+
+	function findAwardName(text, lines) {
+		const actionMatch = normalizeCompactText(text).match(
+			/(?:荣获|获得|取得|获评|被评为)(特等奖学金|一等奖学金|二等奖学金|三等奖学金|团体特等奖|团体一等奖|团体二等奖|团体三等奖|特等奖|一等奖|二等奖|三等奖|金奖|银奖|铜奖|优秀奖|优胜奖|入围奖|成功参赛奖|纪念奖|冠军|亚军|季军|第[一二三四五六七八九十百零]+名|第\d+名)/u,
+		);
+		if (actionMatch?.[1]) {
+			return actionMatch[1];
+		}
+
+		const candidates = [
+			/(国家奖学金|国家励志奖学金|校一等奖学金|校二等奖学金|校三等奖学金)/u,
+			/(特等奖学金|一等奖学金|二等奖学金|三等奖学金|优秀毕业生)/u,
+			/(最佳组织奖|优秀组织奖|最佳人气奖|最佳创意奖|最佳表现奖|道德风尚奖)/u,
+			/(团体特等奖|团体一等奖|团体二等奖|团体三等奖)/u,
+			/(特等奖|一等奖|二等奖|三等奖|金奖|银奖|铜奖|优秀奖|优胜奖|入围奖|成功参赛奖|纪念奖)/u,
+			/(冠军|亚军|季军)/u,
+			/(第[一二三四五六七八九十百零]+名|第\d+名)/u,
+		];
+
+		for (const line of lines) {
+			for (const pattern of candidates) {
+				const match = line.match(pattern);
+				if (match) {
+					return match[0];
+				}
+			}
+		}
+
+		for (const pattern of candidates) {
+			const match = text.match(pattern);
+			if (match) {
+				return match[0];
+			}
+		}
+
+		return "";
+	}
+
+	function findCompetitionName(lines, text, awardName) {
+		const competitionKeywords =
+			/(竞赛|大赛|比赛|挑战赛|评选|活动|杯|建模|程序设计|电子设计|创新创业|互联网\+|机器人大赛|演讲赛|辩论赛|运动会|技能赛|作品赛|创业赛|创青春|挑战杯|英语赛|数学赛|物理赛|化学赛)/u;
+		const compactText = normalizeCompactText(text);
+		const cleanedLines = lines
+			.map((line) => normalizePlainText(line))
+			.filter(Boolean)
+			.filter(
+				(line) =>
+					!/^(荣誉证书|获奖证书|证书|奖状|特发此状|特发此证|兹授予|兹证明)$/u.test(
+						line,
+					),
+			)
+			.filter((line) => !isLikelySchoolLine(line, competitionKeywords))
+			.filter(
+				(line) => !/^(姓名|学号|班级|专业|院系|日期|时间|地点)/u.test(line),
+			);
+
+		const directPatterns = [
+			/(?:在|于)(.+?)(?:中|活动中|比赛中|竞赛中|大赛中|挑战赛中|评选中).{0,20}(?:荣获|获得|取得|获评|被评为)/u,
+			/((?:19|20)\d{2}年.+?(?:竞赛|大赛|比赛|挑战赛|评选|活动|杯))(?:中)?(?:荣获|获得|取得|获评|被评为)/u,
+			/((?:第[一二三四五六七八九十百零\d]+届)?[^，。；：]*?(?:竞赛|大赛|比赛|挑战赛|评选|活动|杯))(?:中)?(?:荣获|获得|取得|获评|被评为)/u,
+		];
+
+		for (const pattern of directPatterns) {
+			const directMatch = text.match(pattern) ?? compactText.match(pattern);
+			if (directMatch?.[1]) {
+				return normalizeCompetitionName(directMatch[1]);
+			}
+		}
+
+		for (const line of cleanedLines) {
+			const inlineMatch = line.match(
+				/((?:19|20)\d{2}年.+?(?:竞赛|大赛|比赛|挑战赛|评选|活动|杯)|(?:第[一二三四五六七八九十百零\d]+届)?[^，。；：]*?(?:竞赛|大赛|比赛|挑战赛|评选|活动|杯))(?:中)?(?:荣获|获得|取得|获评|被评为)?/u,
+			);
+			if (inlineMatch?.[1] && competitionKeywords.test(inlineMatch[1])) {
+				return normalizeCompetitionName(inlineMatch[1]);
+			}
+
+			if (!awardName || !line.includes(awardName)) {
+				continue;
+			}
+
+			const strippedLine = normalizeCompetitionName(
+				line
+					.replace(awardName, "")
+					.replace(/(荣获|获得|取得|获评|被评为)/gu, "")
+					.trim(),
+			);
+			if (strippedLine.length >= 4 && competitionKeywords.test(strippedLine)) {
+				return strippedLine;
+			}
+		}
+
+		const preferredLine = cleanedLines
+			.filter((line) => !awardName || !line.includes(awardName))
+			.find((line) => competitionKeywords.test(line));
+		if (preferredLine) {
+			return normalizeCompetitionName(preferredLine);
+		}
+
+		const awardLineIndex = cleanedLines.findIndex(
+			(line) => awardName && line.includes(awardName),
+		);
+		if (awardLineIndex > 0) {
+			const previousLine = cleanedLines[awardLineIndex - 1];
+			if (competitionKeywords.test(previousLine)) {
+				return normalizeCompetitionName(previousLine);
+			}
+		}
+
+		const longestLine = cleanedLines
+			.filter((line) => line.length >= 6)
+			.filter((line) => !awardName || !line.includes(awardName))
+			.sort((left, right) => right.length - left.length)[0];
+
+		return longestLine ? normalizeCompetitionName(longestLine) : "";
+	}
+
+	function findAwardYear(text) {
+		const match = text.match(/((?:19|20)\d{2})/);
+		return match ? match[1] : "";
+	}
+
+	function findAwardLevel(text) {
+		const compactText = normalizeCompactText(text);
+		if (/(世界|国际|全球|洲际)/u.test(compactText)) {
+			return "世界级";
+		}
+		if (/(全国|国家|国赛)/u.test(compactText)) {
+			return "国家级";
+		}
+		if (/(全省|省级|省赛|自治区|直辖市)/u.test(compactText)) {
+			return "省级";
+		}
+		if (/(全市|市级|市赛)/u.test(compactText)) {
+			return "市级";
+		}
+		if (/(校级|校赛|本校)/u.test(compactText)) {
+			return "校级";
+		}
+		return "";
+	}
+
+	function summarizeFilledFields(parsed) {
+		const labels = [];
+		if (parsed.competitionName) {
+			labels.push("名称");
+		}
+		if (parsed.awardName) {
+			labels.push("名次");
+		}
+		if (parsed.awardYear) {
+			labels.push("年份");
+		}
+		if (parsed.awardLevel) {
+			labels.push("级别");
+		}
+		return labels;
+	}
+
+	function countFilledFields(parsed) {
+		return summarizeFilledFields(parsed).length;
+	}
+
+	function hasStrongFieldSignal(parsed) {
+		return Boolean(
+			parsed.competitionName ||
+			parsed.awardName ||
+			parsed.awardYear ||
+			parsed.awardLevel,
+		);
+	}
+
+	function analyzeOcrTextQuality(text) {
+		const compactText = normalizeCompactText(text);
+		const totalChars = compactText.length || 1;
+		const chineseChars = (compactText.match(/[\u4e00-\u9fff]/gu) ?? []).length;
+		const wordChars = (compactText.match(/[\u4e00-\u9fffA-Za-z0-9]/gu) ?? [])
+			.length;
+		const noisyChars = (
+			compactText.match(
+				/[^0-9A-Za-z\u4e00-\u9fff()（）【】\[\]《》“”"'‘’、，。！？；：:,.·\-+/#&]/gu,
+			) ?? []
+		).length;
+
+		return {
+			totalChars,
+			chineseChars,
+			wordChars,
+			noisyChars,
+			wordRatio: wordChars / totalChars,
+			noiseRatio: noisyChars / totalChars,
+			chineseRatio: chineseChars / totalChars,
+		};
+	}
+
+	function scoreOcrCandidate(parsed, averageConfidence = 0) {
+		const quality = analyzeOcrTextQuality(parsed.rawText ?? "");
+		const filledFields = countFilledFields(parsed);
+		let score = 0;
+
+		score += filledFields * 100;
+		score += Math.round(averageConfidence * 35);
+		score += Math.min(40, Math.round(quality.wordRatio * 30));
+		score += Math.min(20, Math.round(quality.chineseRatio * 20));
+		score -= Math.min(45, Math.round(quality.noiseRatio * 120));
+		score += Math.min(18, Math.round(quality.totalChars / 6));
+
+		if (parsed.competitionName) {
+			score += 22;
+		}
+		if (parsed.awardName) {
+			score += 26;
+		}
+		if (parsed.awardYear) {
+			score += 14;
+		}
+
+		return score;
+	}
+
+	function extractAwardInfoFromTexts(texts) {
+		const rawText = buildOcrRawText(texts);
+		const lines = getOcrLines([rawText]);
+		const flatText = normalizePlainText(rawText);
+		const awardName = findAwardName(flatText, lines);
+		const competitionName = findCompetitionName(lines, flatText, awardName);
+
+		return {
+			rawText,
+			competitionName,
+			awardName,
+			awardYear: findAwardYear(flatText),
+			awardLevel: findAwardLevel(flatText),
+		};
+	}
+
+	function initCustomSelects() {
+		document.querySelectorAll("[data-custom-select-root]").forEach((root) => {
+			if (root.dataset.selectReady === "true") {
+				return;
+			}
+
+			const form = root.closest("form");
+			const details = root.querySelector("details");
+			const summary = root.querySelector("summary");
+			const input = root.querySelector("[data-select-input]");
+			const label = root.querySelector("[data-select-label]");
+			const options = root.querySelectorAll("[data-select-option]");
+
+			if (
+				!(form instanceof HTMLFormElement) ||
+				!(details instanceof HTMLDetailsElement) ||
+				!(summary instanceof HTMLElement) ||
+				!(input instanceof HTMLInputElement) ||
+				!(label instanceof HTMLElement) ||
+				options.length === 0
+			) {
+				return;
+			}
+
+			root.dataset.selectReady = "true";
+			let closeTimer;
+
+			root.addEventListener("mouseenter", () => {
+				if (closeTimer) {
+					clearTimeout(closeTimer);
+				}
+			});
+
+			root.addEventListener("mouseleave", () => {
+				closeTimer = window.setTimeout(() => {
+					details.removeAttribute("open");
+				}, 120);
+			});
+
+			summary.addEventListener("click", (event) => {
+				event.preventDefault();
+				if (closeTimer) {
+					clearTimeout(closeTimer);
+				}
+
+				if (details.hasAttribute("open")) {
+					details.removeAttribute("open");
+				} else {
+					document
+						.querySelectorAll("[data-custom-select-root] details[open]")
+						.forEach((item) => {
+							if (item !== details) {
+								item.removeAttribute("open");
+							}
+						});
+					details.setAttribute("open", "");
+				}
+			});
+
+			options.forEach((option) => {
+				option.addEventListener("click", () => {
+					const nextValue = option.getAttribute("data-value") ?? "";
+					const nextLabel =
+						option.getAttribute("data-label") ??
+						option.textContent?.trim() ??
+						"";
+
+					input.value = nextValue;
+					label.textContent = nextLabel;
+					label.classList.toggle("is-selected", Boolean(nextValue));
+					input.dispatchEvent(new Event("change", { bubbles: true }));
+
+					options.forEach((item) => item.classList.remove("is-active"));
+					option.classList.add("is-active");
+					details.removeAttribute("open");
+					if (root.dataset.selectSubmitOnChange === "true") {
+						form.requestSubmit();
+					}
+				});
+			});
+		});
+	}
+
+	function initAwardAdmin() {
+		const modal = document.getElementById("award-modal");
+		const form = document.getElementById("award-form");
+		const idInput = document.getElementById("award-id");
+		const typeInput = document.getElementById("award-type");
+		const typeSelectRoot = typeInput?.closest("[data-custom-select-root]");
+		const competitionNameInput = document.getElementById(
+			"award-competition-name",
+		);
+		const awardNameInput = document.getElementById("award-name");
+		const yearInput = document.getElementById("award-year");
+		const levelInput = document.getElementById("award-level");
+		const levelSelectRoot = levelInput?.closest("[data-custom-select-root]");
+		const imageInput = document.getElementById("award-image");
+		const imageLabel = document.getElementById("award-image-label");
+		const imageHint = document.getElementById("award-image-hint");
+		const imageLink = document.getElementById("award-image-link");
+		const ocrTextInput = document.getElementById("award-ocr-text");
+		const modalTitle = document.getElementById("award-modal-title");
+		const modalDescription = document.getElementById("award-modal-description");
+		const submitText = document.getElementById("award-submit-text");
+		const submitIcon = document.getElementById("award-submit-icon");
+		const deleteModal = document.getElementById("award-delete-modal");
+		const deleteName = document.getElementById("delete-award-name");
+		const confirmDeleteButton = document.getElementById(
+			"confirm-delete-button",
+		);
+		let currentDeleteForm = null;
+
+		if (
+			!(modal instanceof HTMLElement) ||
+			!(form instanceof HTMLFormElement) ||
+			!(idInput instanceof HTMLInputElement) ||
+			!(typeInput instanceof HTMLInputElement) ||
+			!(typeSelectRoot instanceof HTMLElement) ||
+			!(competitionNameInput instanceof HTMLInputElement) ||
+			!(awardNameInput instanceof HTMLInputElement) ||
+			!(yearInput instanceof HTMLInputElement) ||
+			!(levelInput instanceof HTMLInputElement) ||
+			!(levelSelectRoot instanceof HTMLElement) ||
+			!(imageInput instanceof HTMLInputElement) ||
+			!(imageLabel instanceof HTMLElement) ||
+			!(imageHint instanceof HTMLElement) ||
+			!(imageLink instanceof HTMLAnchorElement) ||
+			!(ocrTextInput instanceof HTMLTextAreaElement) ||
+			!(modalTitle instanceof HTMLElement) ||
+			!(modalDescription instanceof HTMLElement) ||
+			!(submitText instanceof HTMLElement) ||
+			!(submitIcon instanceof Element) ||
+			!(deleteModal instanceof HTMLElement) ||
+			!(deleteName instanceof HTMLElement) ||
+			!(confirmDeleteButton instanceof HTMLButtonElement)
+		) {
+			return;
+		}
+
+		const moveOverlayToBody = (element) => {
+			if (element.parentElement !== document.body) {
+				document.body.appendChild(element);
+			}
+		};
+
+		moveOverlayToBody(modal);
+		moveOverlayToBody(deleteModal);
+
+		if (modal.dataset.initialized === "true") {
+			return;
+		}
+		modal.dataset.initialized = "true";
+		const parseBooleanData = (value) => value === "true";
+		const parseJsonData = (value) => {
+			if (!value) {
+				return null;
+			}
+
+			try {
+				return JSON.parse(value);
+			} catch (error) {
+				console.warn("award modal init data parse failed", error);
+				return null;
+			}
+		};
+		const initialEditingAward = parseJsonData(modal.dataset.initialAward ?? "");
+		const shouldOpenEditModal = parseBooleanData(
+			modal.dataset.shouldOpenEdit ?? "false",
+		);
+		const shouldOpenCreateModal = parseBooleanData(
+			modal.dataset.shouldOpenCreate ?? "false",
+		);
+		const currentYear =
+			Number(modal.dataset.currentYear) || new Date().getFullYear();
+		let currentOcrJob = 0;
+		let currentOcrRequest = null;
+		let ocrProgressTimer = null;
+
+		const clearOcrProgressTimer = () => {
+			if (ocrProgressTimer) {
+				window.clearInterval(ocrProgressTimer);
+				ocrProgressTimer = null;
+			}
+		};
+
+		const clearOcrProgressVisual = () => {
+			ocrTextInput.style.backgroundImage = "";
+			ocrTextInput.style.backgroundRepeat = "";
+			ocrTextInput.style.backgroundPosition = "";
+			ocrTextInput.style.backgroundSize = "";
+		};
+
+		const setOcrProgress = (value, status) => {
+			const normalizedValue = Math.max(0, Math.min(100, Math.round(value)));
+			setOcrDisplay(`${status}\n\n进度：${normalizedValue}%`, "loading");
+			ocrTextInput.style.backgroundImage = `linear-gradient(to right, rgba(34, 211, 238, 0.22) 0%, rgba(34, 211, 238, 0.22) ${normalizedValue}%, rgba(15, 23, 42, 0.18) ${normalizedValue}%, rgba(15, 23, 42, 0.18) 100%)`;
+			ocrTextInput.style.backgroundRepeat = "no-repeat";
+			ocrTextInput.style.backgroundPosition = "left bottom";
+			ocrTextInput.style.backgroundSize = "100% 10px";
+		};
+
+		const resetOcrProgress = () => {
+			clearOcrProgressTimer();
+			clearOcrProgressVisual();
+		};
+
+		const setOcrDisplay = (message, tone = "default") => {
+			ocrTextInput.value = message;
+			ocrTextInput.classList.remove(
+				"text-gray-300",
+				"text-primary-200",
+				"text-red-300",
+				"border-white/10",
+				"border-primary-400/30",
+				"border-red-400/40",
+				"bg-dark-950/80",
+				"bg-red-950/20",
+			);
+			if (tone === "loading") {
+				ocrTextInput.classList.add(
+					"text-primary-200",
+					"border-primary-400/30",
+					"bg-dark-950/80",
+				);
+				return;
+			}
+			clearOcrProgressVisual();
+			if (tone === "error") {
+				ocrTextInput.classList.add(
+					"text-red-300",
+					"border-red-400/40",
+					"bg-red-950/20",
+				);
+				return;
+			}
+			ocrTextInput.classList.add(
+				"text-gray-300",
+				"border-white/10",
+				"bg-dark-950/80",
+			);
+		};
+
+		const syncCustomSelectValue = (root, nextValue) => {
+			const input = root.querySelector("[data-select-input]");
+			const label = root.querySelector("[data-select-label]");
+			const options = root.querySelectorAll("[data-select-option]");
+
+			if (
+				!(input instanceof HTMLInputElement) ||
+				!(label instanceof HTMLElement)
+			) {
+				return;
+			}
+
+			input.value = nextValue;
+			const activeOption = Array.from(options).find(
+				(option) => option.getAttribute("data-value") === nextValue,
+			);
+			label.textContent =
+				activeOption?.getAttribute("data-label") ??
+				label.dataset.placeholder ??
+				"";
+			label.classList.toggle("is-selected", Boolean(nextValue));
+
+			options.forEach((option) => {
+				option.classList.toggle(
+					"is-active",
+					option.getAttribute("data-value") === nextValue,
+				);
+			});
+		};
+
+		const fillFormFromOcr = (parsed) => {
+			setOcrDisplay(parsed.rawText ?? "");
+			if (parsed.competitionName) {
+				competitionNameInput.value = parsed.competitionName;
+			}
+			if (parsed.awardName) {
+				awardNameInput.value = parsed.awardName;
+			}
+			if (parsed.awardYear) {
+				yearInput.value = parsed.awardYear;
+			}
+			if (parsed.awardLevel) {
+				syncCustomSelectValue(levelSelectRoot, parsed.awardLevel);
+			}
+		};
+
+		const requestOcrCandidates = (file, jobId) =>
+			new Promise((resolve, reject) => {
+				const formData = new FormData();
+				formData.append("image", file);
+
+				if (currentOcrRequest) {
+					currentOcrRequest.abort();
+				}
+
+				const request = new XMLHttpRequest();
+				currentOcrRequest = request;
+				let simulatedProgress = 38;
+
+				const finishRequest = () => {
+					clearOcrProgressTimer();
+					if (currentOcrRequest === request) {
+						currentOcrRequest = null;
+					}
+				};
+
+				const startSimulatedProgress = () => {
+					clearOcrProgressTimer();
+					ocrProgressTimer = window.setInterval(() => {
+						if (jobId !== currentOcrJob) {
+							return;
+						}
+						if (simulatedProgress < 72) {
+							simulatedProgress += 4;
+						} else if (simulatedProgress < 90) {
+							simulatedProgress += 1;
+						}
+						const status =
+							simulatedProgress < 65
+								? "服务端正在识别荣誉图片文字..."
+								: "正在整理 OCR 结果并准备回填...";
+						setOcrProgress(simulatedProgress, status);
+					}, 320);
+				};
+
+				request.open("POST", "/api/admin/awards/ocr");
+				request.responseType = "json";
+
+				request.upload.addEventListener("loadstart", () => {
+					if (jobId !== currentOcrJob) {
+						return;
+					}
+					setOcrProgress(5, "正在准备上传荣誉文件...");
+				});
+
+				request.upload.addEventListener("progress", (event) => {
+					if (jobId !== currentOcrJob || !event.lengthComputable) {
+						return;
+					}
+					const percent = 5 + Math.round((event.loaded / event.total) * 30);
+					setOcrProgress(percent, "正在上传荣誉文件...");
+				});
+
+				request.upload.addEventListener("load", () => {
+					if (jobId !== currentOcrJob) {
+						return;
+					}
+					setOcrProgress(38, "文件上传完成，服务端开始识别...");
+					startSimulatedProgress();
+				});
+
+				request.addEventListener("load", () => {
+					finishRequest();
+					const payload =
+						request.response && typeof request.response === "object"
+							? request.response
+							: {};
+					if (request.status >= 200 && request.status < 300) {
+						resolve(payload);
+						return;
+					}
+					reject(
+						new Error(payload?.error || "自动解析失败，请手动填写表单后提交。"),
+					);
+				});
+
+				request.addEventListener("error", () => {
+					finishRequest();
+					reject(new Error("OCR 请求失败，请稍后重试。"));
+				});
+
+				request.addEventListener("abort", () => {
+					finishRequest();
+					reject(new Error("OCR 请求已取消。"));
+				});
+
+				request.send(formData);
+			});
+
+		const parseImageWithOcr = async (file) => {
+			const jobId = ++currentOcrJob;
+			setOcrProgress(5, "正在准备上传荣誉文件...");
+
+			try {
+				if (jobId !== currentOcrJob) {
+					return;
+				}
+
+				const payload = await requestOcrCandidates(file, jobId);
+				const candidates = Array.isArray(payload?.candidates)
+					? payload.candidates
+					: [];
+
+				if (jobId !== currentOcrJob) {
+					return;
+				}
+
+				let bestCandidate = null;
+				const fallbackTexts = [];
+
+				for (const candidate of candidates) {
+					if (!candidate?.text) {
+						continue;
+					}
+
+					fallbackTexts.push(candidate.text);
+					const parsed = extractAwardInfoFromTexts([candidate.text]);
+					const normalizedCandidate = {
+						label: candidate.label ?? "",
+						parsed,
+						averageConfidence: Number(candidate.averageConfidence) || 0,
+						score: scoreOcrCandidate(
+							parsed,
+							Number(candidate.averageConfidence) || 0,
+						),
+						filledFields: countFilledFields(parsed),
+					};
+
+					if (
+						!bestCandidate ||
+						normalizedCandidate.score > bestCandidate.score
+					) {
+						bestCandidate = normalizedCandidate;
+					}
+				}
+
+				const parsed =
+					bestCandidate?.parsed ?? extractAwardInfoFromTexts(fallbackTexts);
+				setOcrProgress(96, "正在回填识别结果...");
+
+				if (!parsed.rawText) {
+					resetOcrProgress();
+					setOcrDisplay(
+						"OCR 没有识别出有效文本，请换更清晰的图片后重试。",
+						"error",
+					);
+					return;
+				}
+
+				fillFormFromOcr(parsed);
+				resetOcrProgress();
+			} catch (error) {
+				console.error("award ocr failed", error);
+				if (jobId !== currentOcrJob) {
+					return;
+				}
+				const message =
+					error instanceof Error && error.message
+						? `自动解析失败：${error.message}`
+						: "自动解析失败，请手动填写表单后提交。";
+				resetOcrProgress();
+				setOcrDisplay(message, "error");
+			}
+		};
+
+		const openModal = () => {
+			modal.classList.remove("hidden");
+			modal.classList.add("flex");
+			document.body.style.overflow = "hidden";
+		};
+
+		const closeModal = () => {
+			modal.classList.add("hidden");
+			modal.classList.remove("flex");
+			document.body.style.overflow = "";
+
+			const url = new URL(window.location.href);
+			if (url.searchParams.has("edit")) {
+				url.searchParams.delete("edit");
+				window.history.replaceState(
+					{},
+					"",
+					`${url.pathname}${url.search}${url.hash}`,
+				);
+			}
+		};
+
+		const openDeleteModal = (button) => {
+			currentDeleteForm = button.closest("form");
+			deleteName.textContent = `“${button.dataset.awardTitle ?? "该记录"}”`;
+			deleteModal.classList.remove("hidden");
+			deleteModal.classList.add("flex");
+			document.body.style.overflow = "hidden";
+		};
+
+		const closeDeleteModal = () => {
+			deleteModal.classList.add("hidden");
+			deleteModal.classList.remove("flex");
+			currentDeleteForm = null;
+			document.body.style.overflow = modal.classList.contains("hidden")
+				? ""
+				: "hidden";
+		};
+
+		const resetFormForCreate = () => {
+			if (currentOcrRequest) {
+				currentOcrRequest.abort();
+				currentOcrRequest = null;
+			}
+			form.reset();
+			idInput.value = "";
+			syncCustomSelectValue(typeSelectRoot, "奖项");
+			yearInput.value = String(currentYear);
+			syncCustomSelectValue(levelSelectRoot, "");
+			resetOcrProgress();
+			setOcrDisplay("上传荣誉图片或 PDF 后，这里会展示 OCR 提取出的完整文本。");
+			imageInput.required = true;
+			imageLabel.textContent = "图片 / PDF";
+			imageHint.classList.add("hidden");
+			imageLink.href = "#";
+			imageLink.textContent = "";
+			modalTitle.textContent = "新建";
+			modalDescription.textContent = "上传荣誉图片或 PDF，并配置展示信息。";
+			submitText.textContent = "新建";
+			submitIcon.setAttribute("name", "ri:add-circle-line");
+		};
+
+		const fillFormForEdit = (award) => {
+			if (currentOcrRequest) {
+				currentOcrRequest.abort();
+				currentOcrRequest = null;
+			}
+			idInput.value = String(award.id ?? "");
+			syncCustomSelectValue(typeSelectRoot, award.honorType ?? "奖项");
+			competitionNameInput.value = award.competitionName ?? "";
+			awardNameInput.value = award.awardName ?? "";
+			yearInput.value = String(award.awardYear ?? currentYear);
+			syncCustomSelectValue(levelSelectRoot, award.awardLevel ?? "");
+			resetOcrProgress();
+			imageInput.value = "";
+			imageInput.required = false;
+			setOcrDisplay("如重新上传荣誉图片或 PDF，这里会展示新的 OCR 原文。");
+			imageLabel.textContent = "图片 / PDF（如需更换再上传）";
+			imageHint.classList.remove("hidden");
+			imageLink.href = award.imageUrl ?? "#";
+			imageLink.textContent = award.imageName ?? "查看当前图片";
+			modalTitle.textContent = "编辑荣誉";
+			modalDescription.textContent = "更新当前荣誉的图片和分类信息。";
+			submitText.textContent = "保存修改";
+			submitIcon.setAttribute("name", "ri:save-line");
+		};
+		imageInput.addEventListener("change", () => {
+			const file = imageInput.files?.[0];
+			if (!file) {
+				resetOcrProgress();
+				setOcrDisplay(
+					idInput.value
+						? "如重新上传荣誉图片或 PDF，这里会展示新的 OCR 原文。"
+						: "上传荣誉图片或 PDF 后，这里会展示 OCR 提取出的完整文本。",
+				);
+				return;
+			}
+
+			void parseImageWithOcr(file);
+		});
+
+		document.addEventListener("click", (event) => {
+			const target = event.target;
+			if (!(target instanceof Element)) {
+				return;
+			}
+
+			const openButton = target.closest("[data-open-award-modal]");
+			if (openButton instanceof HTMLElement) {
+				const mode = openButton.dataset.openAwardModal;
+				if (mode === "edit") {
+					const idValue = openButton.dataset.awardId ?? "";
+					if (!idValue) {
+						return;
+					}
+
+					fillFormForEdit({
+						id: Number(idValue),
+						honorType: openButton.dataset.awardType ?? "奖项",
+						competitionName: openButton.dataset.awardCompetitionName ?? "",
+						awardName: openButton.dataset.awardName ?? "",
+						awardYear: Number(openButton.dataset.awardYear ?? currentYear),
+						awardLevel: openButton.dataset.awardLevel ?? "",
+						imageName: openButton.dataset.awardImageName ?? "",
+						imageUrl: openButton.dataset.awardImageUrl ?? "#",
+					});
+				} else {
+					resetFormForCreate();
+				}
+
+				openModal();
+				return;
+			}
+
+			const closeButton = target.closest("[data-close-award-modal]");
+			if (closeButton) {
+				closeModal();
+				return;
+			}
+
+			const deleteButton = target.closest("[data-open-delete-modal]");
+			if (deleteButton instanceof HTMLElement) {
+				openDeleteModal(deleteButton);
+				return;
+			}
+
+			if (target.closest("[data-close-delete-modal]")) {
+				closeDeleteModal();
+			}
+		});
+
+		confirmDeleteButton.addEventListener("click", () => {
+			if (currentDeleteForm instanceof HTMLFormElement) {
+				currentDeleteForm.submit();
+			}
+		});
+
+		document.addEventListener("keydown", (event) => {
+			if (event.key === "Escape" && !deleteModal.classList.contains("hidden")) {
+				closeDeleteModal();
+			}
+			if (event.key === "Escape" && !modal.classList.contains("hidden")) {
+				closeModal();
+			}
+		});
+
+		if (shouldOpenEditModal && initialEditingAward) {
+			fillFormForEdit(initialEditingAward);
+			openModal();
+		} else if (shouldOpenCreateModal) {
+			resetFormForCreate();
+			openModal();
+		} else {
+			resetFormForCreate();
+		}
+	}
+
+	function initAdminAwardsPartialRefresh() {
+		const form = document.querySelector("[data-admin-awards-filter-form]");
+		const results = document.querySelector("[data-admin-awards-results]");
+
+		if (
+			!(form instanceof HTMLFormElement) ||
+			!(results instanceof HTMLElement) ||
+			form.dataset.partialReady === "true"
+		) {
+			return;
+		}
+
+		form.dataset.partialReady = "true";
+
+		const buildUrlFromForm = () => {
+			const url = new URL(
+				form.getAttribute("action") || window.location.pathname,
+				window.location.origin,
+			);
+			const formData = new FormData(form);
+
+			for (const [key, value] of formData.entries()) {
+				const normalizedValue = String(value).trim();
+				if (normalizedValue) {
+					url.searchParams.set(key, normalizedValue);
+				}
+			}
+
+			return url;
+		};
+
+		const syncFormWithUrl = (url) => {
+			const keywordInput = form.querySelector('input[name="q"]');
+			if (keywordInput instanceof HTMLInputElement) {
+				keywordInput.value = url.searchParams.get("q") ?? "";
+			}
+
+			form.querySelectorAll("[data-custom-select-root]").forEach((root) => {
+				const input = root.querySelector("[data-select-input]");
+				const label = root.querySelector("[data-select-label]");
+				const options = root.querySelectorAll("[data-select-option]");
+
+				if (
+					!(input instanceof HTMLInputElement) ||
+					!(label instanceof HTMLElement)
+				) {
+					return;
+				}
+
+				const nextValue = url.searchParams.get(input.name) ?? "";
+				input.value = nextValue;
+
+				const activeOption = Array.from(options).find(
+					(option) => option.getAttribute("data-value") === nextValue,
+				);
+				label.textContent =
+					activeOption?.getAttribute("data-label") ??
+					label.dataset.placeholder ??
+					"";
+				label.classList.toggle("is-selected", Boolean(nextValue));
+
+				options.forEach((option) => {
+					option.classList.toggle(
+						"is-active",
+						option.getAttribute("data-value") === nextValue,
+					);
+				});
+			});
+		};
+
+		const refreshResults = async (url, replaceHistory = false) => {
+			results.setAttribute("aria-busy", "true");
+			results.style.opacity = "0.55";
+
+			try {
+				const response = await fetch(url, {
+					headers: {
+						"X-Requested-With": "admin-awards-partial",
+					},
+				});
+
+				if (!response.ok) {
+					window.location.href = url;
+					return;
+				}
+
+				const html = await response.text();
+				const doc = new DOMParser().parseFromString(html, "text/html");
+				const nextResults = doc.querySelector("[data-admin-awards-results]");
+
+				if (!(nextResults instanceof HTMLElement)) {
+					window.location.href = url;
+					return;
+				}
+
+				results.innerHTML = nextResults.innerHTML;
+				if (replaceHistory) {
+					window.history.replaceState({}, "", url);
+				} else {
+					window.history.pushState({}, "", url);
+				}
+			} finally {
+				results.style.opacity = "";
+				results.removeAttribute("aria-busy");
+			}
+		};
+
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			await refreshResults(buildUrlFromForm().toString());
+		});
+
+		form.addEventListener("click", async (event) => {
+			const target = event.target;
+			if (!(target instanceof Element)) {
+				return;
+			}
+
+			const clearLink = target.closest("[data-admin-awards-clear]");
+			if (!(clearLink instanceof HTMLAnchorElement)) {
+				return;
+			}
+
+			event.preventDefault();
+			const url = new URL(clearLink.href, window.location.origin);
+			syncFormWithUrl(url);
+			await refreshResults(url.toString());
+		});
+
+		results.addEventListener("click", async (event) => {
+			const target = event.target;
+			if (!(target instanceof Element)) {
+				return;
+			}
+
+			const link = target.closest("a[href]");
+			if (!(link instanceof HTMLAnchorElement)) {
+				return;
+			}
+
+			const url = new URL(link.href, window.location.origin);
+			if (
+				url.origin !== window.location.origin ||
+				url.pathname !== "/admin/awards"
+			) {
+				return;
+			}
+
+			event.preventDefault();
+			await refreshResults(url.toString());
+		});
+
+		window.addEventListener("popstate", async () => {
+			const url = new URL(window.location.href);
+			syncFormWithUrl(url);
+			await refreshResults(url.toString(), true);
+		});
+	}
+
+	function initAwardToast() {
+		const ensureStack = () => {
+			const existing = document.getElementById("notification-stack");
+			if (existing instanceof HTMLElement) {
+				return existing;
+			}
+
+			const stack = document.createElement("div");
+			stack.id = "notification-stack";
+			stack.className = "notification-stack";
+			stack.setAttribute("aria-live", "polite");
+			stack.setAttribute("aria-atomic", "false");
+			document.body.appendChild(stack);
+			return stack;
+		};
+
+		const removeToast = (toast) => {
+			if (!(toast instanceof HTMLElement) || toast.dataset.leaving === "true") {
+				return;
+			}
+
+			toast.dataset.leaving = "true";
+			toast.classList.remove("is-entering");
+			toast.classList.add("is-leaving");
+			window.setTimeout(() => {
+				toast.remove();
+			}, 300);
+		};
+
+		const showToast = ({
+			message,
+			variant = "success",
+			title,
+			duration = 3000,
+		}) => {
+			if (!message) {
+				return;
+			}
+
+			const stack = ensureStack();
+			const toast = document.createElement("section");
+			const resolvedTitle =
+				title ?? (variant === "error" ? "操作失败" : "操作成功");
+			const icon =
+				variant === "error"
+					? '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1" fill="currentColor"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>'
+					: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7L9 18l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+			toast.className = `notification notification--${variant} is-entering`;
+			toast.setAttribute("role", "status");
+			toast.style.setProperty("--toast-duration", `${duration}ms`);
+			toast.innerHTML = `
+				<div class="notification__glow" aria-hidden="true"></div>
+				<div class="notification__row">
+					<div class="notification__icon" aria-hidden="true">${icon}</div>
+					<div class="notification__content">
+						<div class="notification__title">${resolvedTitle}</div>
+						<div class="notification__message"></div>
+					</div>
+					<button type="button" class="notification__close" aria-label="关闭通知">×</button>
+				</div>
+				<div class="notification__progress" aria-hidden="true"></div>
+			`;
+			const messageNode = toast.querySelector(".notification__message");
+			if (messageNode instanceof HTMLElement) {
+				messageNode.textContent = message;
+			}
+
+			const closeButton = toast.querySelector(".notification__close");
+			if (closeButton instanceof HTMLButtonElement) {
+				closeButton.addEventListener("click", () => removeToast(toast));
+			}
+
+			stack.appendChild(toast);
+			window.setTimeout(() => removeToast(toast), duration);
+			return toast;
+		};
+
+		if (typeof window !== "undefined") {
+			window.showAwardToast = showToast;
+		}
+
+		document.querySelectorAll("[data-toast-source]").forEach((source) => {
+			if (
+				!(source instanceof HTMLElement) ||
+				source.dataset.toastConsumed === "true"
+			) {
+				return;
+			}
+
+			source.dataset.toastConsumed = "true";
+			showToast({
+				message: source.textContent?.trim() ?? "",
+				variant: source.dataset.toastVariant === "error" ? "error" : "success",
+				title: source.dataset.toastTitle ?? undefined,
+				duration: Number(source.dataset.toastDuration ?? "3000") || 3000,
+			});
+		});
+
+		const currentUrl = new URL(window.location.href);
+		const transientParams = ["status", "code", "edit"];
+		let didUpdateUrl = false;
+		transientParams.forEach((key) => {
+			if (currentUrl.searchParams.has(key)) {
+				currentUrl.searchParams.delete(key);
+				didUpdateUrl = true;
+			}
+		});
+		if (didUpdateUrl) {
+			window.history.replaceState(
+				{},
+				"",
+				`${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+			);
+		}
+	}
+
+	initCustomSelects();
+	initAwardAdmin();
+	initAdminAwardsPartialRefresh();
+	initAwardToast();
+	document.addEventListener("astro:page-load", initCustomSelects);
+	document.addEventListener("astro:page-load", initAwardAdmin);
+	document.addEventListener("astro:page-load", initAdminAwardsPartialRefresh);
+	document.addEventListener("astro:page-load", initAwardToast);
+</script>

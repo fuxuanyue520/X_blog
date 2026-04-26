@@ -1,0 +1,115 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import AdminShell from "@/components/admin/AdminShell.astro";
+import { getAuthenticatedAdmin } from "@/lib/auth";
+import { getCollection } from "astro:content";
+
+export const prerender = false;
+
+const admin = await getAuthenticatedAdmin(Astro);
+
+if (!admin) {
+	return Astro.redirect("/?login=1");
+}
+
+const posts = await getCollection("posts");
+const sortedPosts = posts.sort(
+	(a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime(),
+);
+const publishedPosts = sortedPosts.filter((post) => !post.data.draft);
+const draftPosts = sortedPosts.filter((post) => post.data.draft);
+---
+
+<BaseLayout title="文档管理" description="后台文档管理">
+	<AdminShell activeSection="documents">
+		<div class="grid gap-6 md:grid-cols-3">
+			<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-6">
+				<p class="text-xs uppercase tracking-[0.25em] text-gray-500">All Docs</p>
+				<p class="mt-3 text-4xl font-bold text-white">{posts.length}</p>
+				<p class="mt-2 text-sm text-gray-400">内容集合中的全部文档</p>
+			</div>
+			<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-6">
+				<p class="text-xs uppercase tracking-[0.25em] text-gray-500">Published</p>
+				<p class="mt-3 text-4xl font-bold text-white">{publishedPosts.length}</p>
+				<p class="mt-2 text-sm text-gray-400">当前对外可见的文档数量</p>
+			</div>
+			<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-6">
+				<p class="text-xs uppercase tracking-[0.25em] text-gray-500">Draft</p>
+				<p class="mt-3 text-4xl font-bold text-white">{draftPosts.length}</p>
+				<p class="mt-2 text-sm text-gray-400">草稿文档数量</p>
+			</div>
+		</div>
+
+		<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-6">
+			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+				<div>
+					<h2 class="text-xl font-semibold text-white">文档列表</h2>
+					<p class="mt-2 text-sm text-gray-400">按发布时间倒序显示，可直接跳转查看前台页面。</p>
+				</div>
+				<a
+					href="/archive"
+					target="_blank"
+					class="inline-flex items-center rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
+				>
+					查看归档页
+				</a>
+			</div>
+
+			<div class="mt-6 space-y-4">
+				{sortedPosts.length > 0 ? (
+					sortedPosts.map((post) => (
+						<article class="rounded-2xl border border-white/10 bg-dark-900/60 p-5">
+							<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+								<div class="min-w-0">
+									<div class="flex flex-wrap items-center gap-2">
+										<h3 class="text-lg font-semibold text-white">{post.data.title}</h3>
+										<span class:list={[
+											"rounded-full border px-3 py-1 text-xs",
+											post.data.draft
+												? "border-amber-500/20 bg-amber-500/10 text-amber-200"
+												: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
+										]}>
+											{post.data.draft ? "草稿" : "已发布"}
+										</span>
+										<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1 text-xs text-gray-300">
+											{post.data.category}
+										</span>
+									</div>
+									<p class="mt-2 text-sm leading-7 text-gray-400">{post.data.description}</p>
+									<div class="mt-4 flex flex-wrap gap-2 text-sm text-gray-300">
+										<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1">
+											发布时间 {post.data.publishedAt.toLocaleDateString("zh-CN")}
+										</span>
+										{post.data.updatedAt && (
+											<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1">
+												更新时间 {post.data.updatedAt.toLocaleDateString("zh-CN")}
+											</span>
+										)}
+										<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1">
+											标签 {post.data.tags.length}
+										</span>
+									</div>
+								</div>
+
+								<div class="flex flex-wrap gap-3">
+									<a
+										href={`/posts/${post.slug}`}
+										target="_blank"
+										class="inline-flex items-center rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
+									>
+										查看页面
+									</a>
+								</div>
+							</div>
+						</article>
+					))
+				) : (
+					<div class="rounded-3xl border border-dashed border-white/10 bg-dark-900/40 p-10 text-center">
+						<p class="text-lg font-medium text-white">还没有文档内容</p>
+						<p class="mt-3 text-sm text-gray-400">可以先在内容目录中新增 Markdown 文档。</p>
+					</div>
+				)}
+			</div>
+		</div>
+	</AdminShell>
+</BaseLayout>

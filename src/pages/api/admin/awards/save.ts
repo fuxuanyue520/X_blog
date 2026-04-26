@@ -1,10 +1,16 @@
 import type { APIRoute } from "astro";
 import { getAuthenticatedAdmin } from "@/lib/auth";
-import { AWARD_LEVELS, fileToBase64, getAwardById, saveAward } from "@/lib/awards";
+import {
+	AWARD_LEVELS,
+	HONOR_TYPES,
+	buildAwardTitle,
+	getAwardById,
+	isSupportedAwardUploadFile,
+	prepareAwardImageForStorage,
+	saveAward,
+} from "@/lib/awards";
 
 export const prerender = false;
-
-const MAX_IMAGE_SIZE_BYTES = 8 * 1024 * 1024;
 
 function redirect(location: string) {
 	return new Response(null, {
@@ -37,25 +43,37 @@ export const POST: APIRoute = async (context) => {
 	const formData = await context.request.formData();
 	const idValue = String(formData.get("id") ?? "").trim();
 	const id = idValue ? Number(idValue) : undefined;
-	const title = String(formData.get("title") ?? "").trim();
-	const school = String(formData.get("school") ?? "").trim();
+	const honorType = String(formData.get("honorType") ?? "").trim();
+	const competitionName = String(formData.get("competitionName") ?? "").trim();
+	const awardName = String(formData.get("awardName") ?? "").trim();
 	const awardYear = Number(String(formData.get("awardYear") ?? "").trim());
 	const awardLevel = String(formData.get("awardLevel") ?? "").trim();
-	const description = String(formData.get("description") ?? "").trim();
-	const sortOrder = Number(String(formData.get("sortOrder") ?? "0").trim() || "0");
 	const imageField = formData.get("image");
 
 	const existingAward = id ? await getAwardById(id) : null;
+	const description = String(
+		formData.get("description") ?? existingAward?.description ?? "",
+	).trim();
+	const title = buildAwardTitle(competitionName, awardName);
 
 	if (idValue && (!Number.isInteger(id) || (id ?? 0) <= 0 || !existingAward)) {
 		return redirect(buildRedirect({ status: "error", code: "invalid_award" }));
 	}
 
-	if (!title || !school || !Number.isInteger(awardYear) || awardYear < 1900 || awardYear > 2100 || !awardLevel) {
+	if (
+		!honorType ||
+		!Number.isInteger(awardYear) ||
+		awardYear < 1900 ||
+		awardYear > 2100
+	) {
 		return redirect(buildRedirect({ status: "error", code: "invalid_fields", edit: id }));
 	}
 
-	if (!AWARD_LEVELS.includes(awardLevel as (typeof AWARD_LEVELS)[number])) {
+	if (!HONOR_TYPES.includes(honorType as (typeof HONOR_TYPES)[number])) {
+		return redirect(buildRedirect({ status: "error", code: "invalid_type", edit: id }));
+	}
+
+	if (awardLevel && !AWARD_LEVELS.includes(awardLevel as (typeof AWARD_LEVELS)[number])) {
 		return redirect(buildRedirect({ status: "error", code: "invalid_level", edit: id }));
 	}
 
@@ -64,17 +82,14 @@ export const POST: APIRoute = async (context) => {
 	let imageBase64 = existingAward?.imageBase64 ?? "";
 
 	if (imageField instanceof File && imageField.size > 0) {
-		if (!imageField.type.startsWith("image/")) {
+		if (!isSupportedAwardUploadFile(imageField)) {
 			return redirect(buildRedirect({ status: "error", code: "invalid_image_type", edit: id }));
 		}
 
-		if (imageField.size > MAX_IMAGE_SIZE_BYTES) {
-			return redirect(buildRedirect({ status: "error", code: "image_too_large", edit: id }));
-		}
-
-		imageName = imageField.name || `${title}.jpg`;
-		imageMimeType = imageField.type;
-		imageBase64 = await fileToBase64(imageField);
+		const preparedImage = await prepareAwardImageForStorage(imageField, title);
+		imageName = preparedImage.imageName;
+		imageMimeType = preparedImage.imageMimeType;
+		imageBase64 = preparedImage.imageBase64;
 	}
 
 	if (!imageBase64 || !imageMimeType) {
@@ -83,12 +98,12 @@ export const POST: APIRoute = async (context) => {
 
 	const savedId = await saveAward({
 		id,
-		title,
-		school,
+		honorType,
+		competitionName,
+		awardName,
 		awardYear,
 		awardLevel,
 		description,
-		sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
 		imageName,
 		imageMimeType,
 		imageBase64,

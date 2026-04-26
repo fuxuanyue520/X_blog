@@ -1,339 +1,462 @@
 ---
-import { Icon } from 'astro-icon/components';
+import { Icon } from "astro-icon/components";
 
 const currentUrl = new URL(Astro.url);
-currentUrl.searchParams.delete('login');
-currentUrl.searchParams.delete('error');
+currentUrl.searchParams.delete("login");
+currentUrl.searchParams.delete("error");
 const currentPathWithSearch = `${currentUrl.pathname}${currentUrl.search}`;
-const logoutRedirectTo = Astro.url.pathname.startsWith('/admin') ? '/' : currentPathWithSearch;
+const logoutRedirectTo = Astro.url.pathname.startsWith("/admin")
+	? "/"
+	: currentPathWithSearch;
 const errorMessages: Record<string, string> = {
-  missing_fields: '请输入用户名和密码。',
-  invalid_credentials: '用户名或密码错误。',
+	missing_fields: "请输入用户名和密码。",
+	invalid_credentials: "用户名或密码错误。",
 };
-const errorCode = Astro.url.searchParams.get('error') ?? '';
-const errorMessage = errorMessages[errorCode] ?? '';
-const shouldOpenLoginModal = Astro.url.searchParams.get('login') === '1' || Boolean(errorMessage);
+const errorCode = Astro.url.searchParams.get("error") ?? "";
+const errorMessage = errorMessages[errorCode] ?? "";
+const shouldOpenLoginModal =
+	Astro.url.searchParams.get("login") === "1" || Boolean(errorMessage);
 ---
 
-<nav class="fixed top-0 left-0 w-full h-16 lg:h-20 bg-dark-900/80 backdrop-blur-xl z-50 border-b border-white/5 transition-all duration-300" transition:persist>
-  <div class="max-w-[1600px] mx-auto h-full px-4 md:px-6 lg:px-8 flex items-center justify-between">
-    
-    <div class="flex items-center gap-8 lg:gap-10">
-        <!-- Logo -->
-        <a href="/" class="flex items-center gap-3 group">
-          <div class="w-10 h-10 lg:w-12 lg:h-12 rounded-full overflow-hidden border-2 border-primary-500/50 group-hover:border-primary-500 group-hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all duration-300">
-            <img src="/avatar.jpg" alt="Logo" class="w-full h-full object-cover" />
-          </div>
-          <span class="text-xl lg:text-2xl font-serif font-bold text-gray-100 group-hover:text-primary-500 transition-colors tracking-wide">秋兰以为佩</span>
-        </a>
+<nav
+	class="fixed top-0 left-0 w-full h-16 lg:h-20 bg-dark-900/80 backdrop-blur-xl z-50 border-b border-white/5 transition-all duration-300"
+	transition:persist
+>
+	<div
+		class="max-w-[1600px] mx-auto h-full px-4 md:px-6 lg:px-8 flex items-center justify-between"
+	>
+		<div class="flex items-center gap-8 lg:gap-10">
+			<!-- Logo -->
+			<a href="/" class="flex items-center gap-3 group">
+				<div
+					class="w-10 h-10 lg:w-12 lg:h-12 rounded-full overflow-hidden border-2 border-primary-500/50 group-hover:border-primary-500 group-hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all duration-300"
+				>
+					<img
+						src="/avatar.jpg"
+						alt="Logo"
+						class="w-full h-full object-cover"
+					/>
+				</div>
+				<span
+					class="text-xl lg:text-2xl font-serif font-bold text-gray-100 group-hover:text-primary-500 transition-colors tracking-wide"
+					>秋兰以为佩</span
+				>
+			</a>
 
-        <!-- Desktop Menu (Left Aligned) -->
-        <div class="hidden md:flex items-center gap-6 lg:gap-8">
-          <a href="/" class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group">
-            <Icon name="ri:home-4-line" class="text-xl lg:text-2xl" />
-            <span>主页</span>
-            <span class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"></span>
-          </a>
-          <a href="/awards" class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group">
-            <Icon name="ri:image-2-line" class="text-xl lg:text-2xl" />
-            <span>荣誉墙</span>
-            <span class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"></span>
-          </a>
-          <a href="/archive" class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group">
-            <Icon name="ri:archive-line" class="text-xl lg:text-2xl" />
-            <span>归档</span>
-            <span class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"></span>
-          </a>
-          <a href="/about" class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group">
-            <Icon name="ri:user-smile-line" class="text-xl lg:text-2xl" />
-            <span>关于</span>
-            <span class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"></span>
-          </a>
-          <a href="/admin" class="hidden text-base lg:text-lg font-medium text-primary-300 hover:text-primary-200 transition-colors items-center gap-2 relative group" data-auth-admin-link-desktop>
-            <Icon name="ri:shield-user-line" class="text-xl lg:text-2xl" />
-            <span>后台管理</span>
-            <span class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"></span>
-          </a>
-        </div>
-    </div>
+			<!-- Desktop Menu (Left Aligned) -->
+			<div class="hidden md:flex items-center gap-6 lg:gap-8">
+				<a
+					href="/"
+					class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group"
+				>
+					<Icon name="ri:home-4-line" class="text-xl lg:text-2xl" />
+					<span>主页</span>
+					<span
+						class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"
+					></span>
+				</a>
+				<a
+					href="/awards"
+					class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group"
+				>
+					<Icon name="ri:image-2-line" class="text-xl lg:text-2xl" />
+					<span>荣誉墙</span>
+					<span
+						class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"
+					></span>
+				</a>
+				<a
+					href="/archive"
+					class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group"
+				>
+					<Icon name="ri:archive-line" class="text-xl lg:text-2xl" />
+					<span>归档</span>
+					<span
+						class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"
+					></span>
+				</a>
+				<a
+					href="/about"
+					class="text-base lg:text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-2 relative group"
+				>
+					<Icon name="ri:user-smile-line" class="text-xl lg:text-2xl" />
+					<span>关于</span>
+					<span
+						class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"
+					></span>
+				</a>
+				<a
+					href="/admin/documents"
+					class="hidden text-base lg:text-lg font-medium text-primary-300 hover:text-primary-200 transition-colors items-center gap-2 relative group"
+					data-auth-admin-link-desktop
+				>
+					<Icon name="ri:shield-user-line" class="text-xl lg:text-2xl" />
+					<span>管理</span>
+					<span
+						class="absolute -bottom-1.5 left-0 w-0 h-0.5 bg-primary-500 transition-all group-hover:w-full"
+					></span>
+				</a>
+			</div>
+		</div>
 
-    <div class="flex items-center gap-3">
-      <div class="hidden md:block">
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 rounded-full border border-primary-400/25 bg-dark-800/85 px-4 py-2 text-sm font-semibold text-primary-100 shadow-[0_8px_30px_rgba(8,145,178,0.12)] transition hover:border-primary-400/50 hover:bg-primary-500/10 hover:text-primary-200"
-          data-open-login-modal
-          data-auth-guest
-        >
-          <Icon name="ri:login-box-line" class="text-lg" />
-          <span>登录</span>
-        </button>
+		<div class="flex items-center gap-3">
+			<div class="hidden md:block">
+				<button
+					type="button"
+					class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300"
+					data-open-login-modal
+					data-auth-guest
+				>
+					<Icon name="ri:user-shared-line" class="text-lg" />
+					<span>登录</span>
+				</button>
 
-        <form method="POST" action="/api/admin/logout" class="hidden" data-auth-logout-desktop>
-          <input type="hidden" name="redirectTo" value={logoutRedirectTo} />
-          <button type="submit" class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300">
-            <Icon name="ri:logout-box-r-line" class="text-lg" />
-            <span>退出</span>
-          </button>
-        </form>
-      </div>
+				<form
+					method="POST"
+					action="/api/admin/logout"
+					class="hidden"
+					data-auth-logout-desktop
+				>
+					<input type="hidden" name="redirectTo" value={logoutRedirectTo} />
+					<button
+						type="submit"
+						class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300"
+					>
+						<Icon name="ri:logout-box-r-line" class="text-lg" />
+						<span>退出</span>
+					</button>
+				</form>
+			</div>
 
-      <button id="mobile-menu-btn" class="md:hidden text-gray-300 hover:text-primary-500 focus:outline-none p-1" aria-label="打开菜单">
-        <Icon name="ri:menu-4-line" class="text-2xl" id="menu-icon-open" />
-        <Icon name="ri:close-line" class="text-2xl hidden" id="menu-icon-close" />
-      </button>
-    </div>
-  </div>
+			<button
+				id="mobile-menu-btn"
+				class="md:hidden text-gray-300 hover:text-primary-500 focus:outline-none p-1"
+				aria-label="打开菜单"
+			>
+				<Icon name="ri:menu-4-line" class="text-2xl" id="menu-icon-open" />
+				<Icon
+					name="ri:close-line"
+					class="text-2xl hidden"
+					id="menu-icon-close"
+				/>
+			</button>
+		</div>
+	</div>
 
-  <!-- Mobile Menu Dropdown -->
-  <div id="mobile-menu" class="fixed top-16 left-0 w-full bg-dark-900/95 backdrop-blur-xl border-b border-white/5 shadow-2xl transform -translate-y-[150%] transition-transform duration-300 md:hidden flex flex-col items-center py-6 gap-6 z-40">
-      <a href="/" class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5">
-        <Icon name="ri:home-4-line" class="text-xl" />
-        <span>主页</span>
-      </a>
-      <a href="/archive" class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5">
-        <Icon name="ri:archive-line" class="text-xl" />
-        <span>归档</span>
-      </a>
-      <a href="/awards" class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5">
-        <Icon name="ri:image-2-line" class="text-xl" />
-        <span>荣誉墙</span>
-      </a>
-      <a href="/about" class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5">
-        <Icon name="ri:user-smile-line" class="text-xl" />
-        <span>关于</span>
-      </a>
-      <button type="button" class="text-lg font-medium text-primary-200 hover:text-primary-100 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5" data-open-login-modal data-auth-guest>
-        <Icon name="ri:login-box-line" class="text-xl" />
-        <span>登录</span>
-      </button>
-      <a href="/admin" class="hidden text-lg font-medium text-primary-300 hover:text-primary-200 transition-colors items-center gap-3 w-full justify-center py-2 active:bg-white/5" data-auth-admin-link>
-        <Icon name="ri:shield-user-line" class="text-xl" />
-        <span>后台管理</span>
-      </a>
-      <form method="POST" action="/api/admin/logout" class="hidden w-full px-6" data-auth-admin-form>
-        <input type="hidden" name="redirectTo" value={logoutRedirectTo} />
-        <button type="submit" class="w-full text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 justify-center py-2 active:bg-white/5">
-          <Icon name="ri:logout-box-r-line" class="text-xl" />
-          <span>退出登录</span>
-        </button>
-      </form>
-  </div>
+	<!-- Mobile Menu Dropdown -->
+	<div
+		id="mobile-menu"
+		class="fixed top-16 left-0 w-full bg-dark-900/95 backdrop-blur-xl border-b border-white/5 shadow-2xl transform -translate-y-[150%] transition-transform duration-300 md:hidden flex flex-col items-center py-6 gap-6 z-40"
+	>
+		<a
+			href="/"
+			class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5"
+		>
+			<Icon name="ri:home-4-line" class="text-xl" />
+			<span>主页</span>
+		</a>
+		<a
+			href="/archive"
+			class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5"
+		>
+			<Icon name="ri:archive-line" class="text-xl" />
+			<span>归档</span>
+		</a>
+		<a
+			href="/awards"
+			class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5"
+		>
+			<Icon name="ri:image-2-line" class="text-xl" />
+			<span>荣誉墙</span>
+		</a>
+		<a
+			href="/about"
+			class="text-lg font-medium text-gray-300 hover:text-primary-400 transition-colors flex items-center gap-3 w-full justify-center py-2 active:bg-white/5"
+		>
+			<Icon name="ri:user-smile-line" class="text-xl" />
+			<span>关于</span>
+		</a>
+		<button
+			type="button"
+			class="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-3 text-lg font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-400"
+			data-open-login-modal
+			data-auth-guest
+		>
+			<Icon name="ri:user-shared-line" class="text-xl" />
+			<span>登录</span>
+		</button>
+		<a
+			href="/admin/documents"
+			class="hidden text-lg font-medium text-primary-300 hover:text-primary-200 transition-colors items-center gap-3 w-full justify-center py-2 active:bg-white/5"
+			data-auth-admin-link
+		>
+			<Icon name="ri:shield-user-line" class="text-xl" />
+			<span>管理</span>
+		</a>
+		<form
+			method="POST"
+			action="/api/admin/logout"
+			class="hidden w-full px-6"
+			data-auth-admin-form
+		>
+			<input type="hidden" name="redirectTo" value={logoutRedirectTo} />
+			<button
+				type="submit"
+				class="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-3 text-lg font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-400"
+			>
+				<Icon name="ri:logout-box-r-line" class="text-xl" />
+				<span>退出登录</span>
+			</button>
+		</form>
+	</div>
 </nav>
 
 <div
-  id="login-modal"
-  data-open={shouldOpenLoginModal ? 'true' : 'false'}
-  class:list={[
-    'fixed inset-0 z-[70] flex items-center justify-center p-4',
-    { hidden: !shouldOpenLoginModal },
-  ]}
+	id="login-modal"
+	data-open={shouldOpenLoginModal ? "true" : "false"}
+	class:list={[
+		"fixed inset-0 z-[70] flex items-center justify-center p-4",
+		{ hidden: !shouldOpenLoginModal },
+	]}
 >
-  <button
-    type="button"
-    class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
-    data-close-login-modal
-    aria-label="关闭登录弹窗"
-  ></button>
+	<button
+		type="button"
+		class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
+		data-close-login-modal
+		aria-label="关闭登录弹窗"></button>
 
-  <div class="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-dark-800/95 p-8 shadow-2xl shadow-black/40">
-    <button
-      type="button"
-      class="absolute right-4 top-4 rounded-full p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
-      data-close-login-modal
-      aria-label="关闭"
-    >
-      <Icon name="ri:close-line" class="text-xl" />
-    </button>
+	<div
+		class="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-dark-800/95 p-8 shadow-2xl shadow-black/40"
+	>
+		<button
+			type="button"
+			class="absolute right-4 top-4 rounded-full p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
+			data-close-login-modal
+			aria-label="关闭"
+		>
+			<Icon name="ri:close-line" class="text-xl" />
+		</button>
 
-    <div class="mb-8 text-center">
-      <p class="mb-3 text-sm uppercase tracking-[0.35em] text-primary-400">Admin</p>
-      <h2 class="text-3xl font-bold text-white">管理员登录</h2>
-      <p class="mt-3 text-sm text-gray-400">
-        输入用户名和密码后即可获得后台管理权限。
-      </p>
-    </div>
+		<div class="mb-8 text-center">
+			<p class="mb-3 text-sm uppercase tracking-[0.35em] text-primary-400">
+				Admin
+			</p>
+			<h2 class="text-3xl font-bold text-white">管理员登录</h2>
+			<p class="mt-3 text-sm text-gray-400">
+				输入用户名和密码后即可获得后台管理权限。
+			</p>
+		</div>
 
-    {errorMessage && (
-      <div class="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-        {errorMessage}
-      </div>
-    )}
+		{
+			errorMessage && (
+				<div class="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+					{errorMessage}
+				</div>
+			)
+		}
 
-    <form method="POST" action="/api/admin/login" class="space-y-5">
-      <input type="hidden" name="redirectTo" value={currentPathWithSearch} />
+		<form method="POST" action="/api/admin/login" class="space-y-5">
+			<input type="hidden" name="redirectTo" value={currentPathWithSearch} />
 
-      <div>
-        <label for="nav-login-username" class="mb-2 block text-sm font-medium text-gray-200">
-          用户名
-        </label>
-        <input
-          id="nav-login-username"
-          name="username"
-          type="text"
-          autocomplete="username"
-          required
-          class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-          placeholder="请输入管理员用户名"
-        />
-      </div>
+			<div>
+				<label
+					for="nav-login-username"
+					class="mb-2 block text-sm font-medium text-gray-200"
+				>
+					用户名
+				</label>
+				<input
+					id="nav-login-username"
+					name="username"
+					type="text"
+					autocomplete="username"
+					required
+					class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+					placeholder="请输入管理员用户名"
+				/>
+			</div>
 
-      <div>
-        <label for="nav-login-password" class="mb-2 block text-sm font-medium text-gray-200">
-          密码
-        </label>
-        <input
-          id="nav-login-password"
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          required
-          class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-          placeholder="请输入密码"
-        />
-      </div>
+			<div>
+				<label
+					for="nav-login-password"
+					class="mb-2 block text-sm font-medium text-gray-200"
+				>
+					密码
+				</label>
+				<input
+					id="nav-login-password"
+					name="password"
+					type="password"
+					autocomplete="current-password"
+					required
+					class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+					placeholder="请输入密码"
+				/>
+			</div>
 
-      <button
-        type="submit"
-        class="w-full rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600"
-      >
-        登录
-      </button>
-    </form>
-  </div>
+			<button
+				type="submit"
+				class="w-full rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600"
+			>
+				登录
+			</button>
+		</form>
+	</div>
 </div>
 
 <script>
-  // Runs on initial load and after every navigation
-  document.addEventListener('astro:page-load', () => {
-    const menuBtn = document.getElementById('mobile-menu-btn');
-    const mobileMenu = document.getElementById('mobile-menu');
-    const menuIconOpen = document.getElementById('menu-icon-open');
-    const menuIconClose = document.getElementById('menu-icon-close');
-    const loginModal = document.getElementById('login-modal');
-    const openModalButtons = document.querySelectorAll('[data-open-login-modal]');
-    const closeModalButtons = document.querySelectorAll('[data-close-login-modal]');
-    const usernameInput = document.getElementById('nav-login-username');
-    const guestActions = document.querySelectorAll('[data-auth-guest]');
-    const adminDesktopLink = document.querySelector('[data-auth-admin-link-desktop]');
-    const adminDesktopLogout = document.querySelector('[data-auth-logout-desktop]');
-    const adminMobileLink = document.querySelector('[data-auth-admin-link]');
-    const adminMobileForm = document.querySelector('[data-auth-admin-form]');
-    let isMenuOpen = false;
+	// Runs on initial load and after every navigation
+	document.addEventListener("astro:page-load", () => {
+		const menuBtn = document.getElementById("mobile-menu-btn");
+		const mobileMenu = document.getElementById("mobile-menu");
+		const menuIconOpen = document.getElementById("menu-icon-open");
+		const menuIconClose = document.getElementById("menu-icon-close");
+		const loginModal = document.getElementById("login-modal");
+		const openModalButtons = document.querySelectorAll(
+			"[data-open-login-modal]",
+		);
+		const closeModalButtons = document.querySelectorAll(
+			"[data-close-login-modal]",
+		);
+		const usernameInput = document.getElementById("nav-login-username");
+		const guestActions = document.querySelectorAll("[data-auth-guest]");
+		const adminDesktopLink = document.querySelector(
+			"[data-auth-admin-link-desktop]",
+		);
+		const adminDesktopLogout = document.querySelector(
+			"[data-auth-logout-desktop]",
+		);
+		const adminMobileLink = document.querySelector("[data-auth-admin-link]");
+		const adminMobileForm = document.querySelector("[data-auth-admin-form]");
+		let isMenuOpen = false;
 
-    if (menuBtn && mobileMenu && menuIconOpen && menuIconClose) {
-      isMenuOpen = false;
-      mobileMenu.classList.add('-translate-y-[150%]');
-      menuIconOpen.classList.remove('hidden');
-      menuIconClose.classList.add('hidden');
+		if (menuBtn && mobileMenu && menuIconOpen && menuIconClose) {
+			isMenuOpen = false;
+			mobileMenu.classList.add("-translate-y-[150%]");
+			menuIconOpen.classList.remove("hidden");
+			menuIconClose.classList.add("hidden");
 
-      const toggleMenu = () => {
-        isMenuOpen = !isMenuOpen;
-        if (isMenuOpen) {
-          mobileMenu.classList.remove('-translate-y-[150%]');
-          menuIconOpen.classList.add('hidden');
-          menuIconClose.classList.remove('hidden');
-        } else {
-          mobileMenu.classList.add('-translate-y-[150%]');
-          menuIconOpen.classList.remove('hidden');
-          menuIconClose.classList.add('hidden');
-        }
-      };
+			const toggleMenu = () => {
+				isMenuOpen = !isMenuOpen;
+				if (isMenuOpen) {
+					mobileMenu.classList.remove("-translate-y-[150%]");
+					menuIconOpen.classList.add("hidden");
+					menuIconClose.classList.remove("hidden");
+				} else {
+					mobileMenu.classList.add("-translate-y-[150%]");
+					menuIconOpen.classList.remove("hidden");
+					menuIconClose.classList.add("hidden");
+				}
+			};
 
-      menuBtn.onclick = toggleMenu;
-    }
+			menuBtn.onclick = toggleMenu;
+		}
 
-    if (loginModal) {
-      const openModal = () => {
-        loginModal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-        setTimeout(() => usernameInput?.focus(), 0);
-      };
+		if (loginModal) {
+			const openModal = () => {
+				loginModal.classList.remove("hidden");
+				document.body.style.overflow = "hidden";
+				setTimeout(() => usernameInput?.focus(), 0);
+			};
 
-      const closeModal = () => {
-        loginModal.classList.add('hidden');
-        document.body.style.overflow = '';
+			const closeModal = () => {
+				loginModal.classList.add("hidden");
+				document.body.style.overflow = "";
 
-        const url = new URL(window.location.href);
-        if (url.searchParams.has('login') || url.searchParams.has('error')) {
-          url.searchParams.delete('login');
-          url.searchParams.delete('error');
-          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
-        }
-      };
+				const url = new URL(window.location.href);
+				if (url.searchParams.has("login") || url.searchParams.has("error")) {
+					url.searchParams.delete("login");
+					url.searchParams.delete("error");
+					window.history.replaceState(
+						{},
+						"",
+						`${url.pathname}${url.search}${url.hash}`,
+					);
+				}
+			};
 
-      if (loginModal.dataset.open === 'true') {
-        openModal();
-      }
+			if (loginModal.dataset.open === "true") {
+				openModal();
+			}
 
-      openModalButtons.forEach((button) => {
-        button.onclick = () => {
-          openModal();
-          if (mobileMenu) {
-            mobileMenu.classList.add('-translate-y-[150%]');
-          }
-          if (menuIconOpen && menuIconClose) {
-            menuIconOpen.classList.remove('hidden');
-            menuIconClose.classList.add('hidden');
-          }
-          isMenuOpen = false;
-        };
-      });
+			openModalButtons.forEach((button) => {
+				button.onclick = () => {
+					openModal();
+					if (mobileMenu) {
+						mobileMenu.classList.add("-translate-y-[150%]");
+					}
+					if (menuIconOpen && menuIconClose) {
+						menuIconOpen.classList.remove("hidden");
+						menuIconClose.classList.add("hidden");
+					}
+					isMenuOpen = false;
+				};
+			});
 
-      closeModalButtons.forEach((button) => {
-        button.onclick = closeModal;
-      });
+			closeModalButtons.forEach((button) => {
+				button.onclick = closeModal;
+			});
 
-      document.onkeydown = (event) => {
-        if (event.key === 'Escape' && !loginModal.classList.contains('hidden')) {
-          closeModal();
-        }
-      };
-    }
+			document.onkeydown = (event) => {
+				if (
+					event.key === "Escape" &&
+					!loginModal.classList.contains("hidden")
+				) {
+					closeModal();
+				}
+			};
+		}
 
-    fetch('/api/admin/session', {
-      credentials: 'same-origin',
-      headers: {
-        Accept: 'application/json',
-      },
-    })
-      .then((response) => response.ok ? response.json() : null)
-      .then((session) => {
-        const authenticated = Boolean(session?.authenticated);
+		fetch("/api/admin/session", {
+			credentials: "same-origin",
+			headers: {
+				Accept: "application/json",
+			},
+		})
+			.then((response) => (response.ok ? response.json() : null))
+			.then((session) => {
+				const authenticated = Boolean(session?.authenticated);
 
-        guestActions.forEach((element) => {
-          element.classList.toggle('hidden', authenticated);
-          if (element instanceof HTMLElement && element.classList.contains('md:inline-flex')) {
-            element.style.display = authenticated ? 'none' : '';
-          }
-        });
+				guestActions.forEach((element) => {
+					element.classList.toggle("hidden", authenticated);
+					if (
+						element instanceof HTMLElement &&
+						element.classList.contains("md:inline-flex")
+					) {
+						element.style.display = authenticated ? "none" : "";
+					}
+				});
 
-        if (adminDesktopLink instanceof HTMLElement) {
-          adminDesktopLink.classList.toggle('hidden', !authenticated);
-          adminDesktopLink.classList.toggle('inline-flex', authenticated);
-        }
+				if (adminDesktopLink instanceof HTMLElement) {
+					adminDesktopLink.classList.toggle("hidden", !authenticated);
+					adminDesktopLink.classList.toggle("inline-flex", authenticated);
+				}
 
-        if (adminDesktopLogout instanceof HTMLElement) {
-          adminDesktopLogout.classList.toggle('hidden', !authenticated);
-          adminDesktopLogout.classList.toggle('block', authenticated);
-        }
+				if (adminDesktopLogout instanceof HTMLElement) {
+					adminDesktopLogout.classList.toggle("hidden", !authenticated);
+					adminDesktopLogout.classList.toggle("block", authenticated);
+				}
 
-        if (adminMobileLink instanceof HTMLElement) {
-          adminMobileLink.classList.toggle('hidden', !authenticated);
-          adminMobileLink.classList.toggle('flex', authenticated);
-        }
+				if (adminMobileLink instanceof HTMLElement) {
+					adminMobileLink.classList.toggle("hidden", !authenticated);
+					adminMobileLink.classList.toggle("flex", authenticated);
+				}
 
-        if (adminMobileForm instanceof HTMLElement) {
-          adminMobileForm.classList.toggle('hidden', !authenticated);
-        }
+				if (adminMobileForm instanceof HTMLElement) {
+					adminMobileForm.classList.toggle("hidden", !authenticated);
+				}
 
-        if (authenticated && loginModal && !loginModal.classList.contains('hidden')) {
-          loginModal.classList.add('hidden');
-          document.body.style.overflow = '';
-        }
-      })
-      .catch(() => {
-        // Ignore session fetch failures and keep guest UI.
-      });
-  });
+				if (
+					authenticated &&
+					loginModal &&
+					!loginModal.classList.contains("hidden")
+				) {
+					loginModal.classList.add("hidden");
+					document.body.style.overflow = "";
+				}
+			})
+			.catch(() => {
+				// Ignore session fetch failures and keep guest UI.
+			});
+	});
 </script>

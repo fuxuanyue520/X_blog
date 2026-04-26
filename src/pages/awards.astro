@@ -1,192 +1,318 @@
 ---
 import PageLayout from "@/layouts/PageLayout.astro";
 import { Icon } from "astro-icon/components";
-import { listAwardFilterOptions, listAwards } from "@/lib/awards";
+import {
+	groupAwardsByType,
+	listAwardFilterOptions,
+	listAwards,
+} from "@/lib/awards";
 
 export const prerender = false;
 
-const selectedSchool = Astro.url.searchParams.get("school")?.trim() ?? "";
+const keyword = Astro.url.searchParams.get("q")?.trim() ?? "";
+const selectedType = Astro.url.searchParams.get("type")?.trim() ?? "";
 const selectedYearValue = Astro.url.searchParams.get("year")?.trim() ?? "";
 const selectedLevel = Astro.url.searchParams.get("level")?.trim() ?? "";
 const selectedYear = selectedYearValue ? Number(selectedYearValue) : undefined;
 
+const activeFilters = {
+	keyword: keyword || undefined,
+	honorType: selectedType || undefined,
+	awardYear: Number.isInteger(selectedYear) ? selectedYear : undefined,
+	awardLevel: selectedLevel || undefined,
+};
+
 const [awards, filterOptions] = await Promise.all([
-	listAwards({
-		school: selectedSchool || undefined,
-		awardYear: Number.isInteger(selectedYear) ? selectedYear : undefined,
-		awardLevel: selectedLevel || undefined,
-	}),
+	listAwards(activeFilters),
 	listAwardFilterOptions(),
 ]);
+const groupedAwards = groupAwardsByType(awards);
 
-const schoolOptions = filterOptions.schools.map((school) => ({ value: school, label: school }));
+const typeOptions = filterOptions.types.map((type) => ({
+	value: type,
+	label: type,
+}));
 
-const yearOptions = filterOptions.years.map((year) => ({ value: String(year), label: `${year} 年` }));
+const yearOptions = filterOptions.years.map((year) => ({
+	value: String(year),
+	label: `${year} 年`,
+}));
 
-const levelOptions = filterOptions.levels.map((level) => ({ value: level, label: level }));
+const levelOptions = filterOptions.levels.map((level) => ({
+	value: level,
+	label: level,
+}));
 
-function getSelectedLabel(options: Array<{ value: string; label: string }>, value: string, fallback: string) {
+function getSelectedLabel(
+	options: Array<{ value: string; label: string }>,
+	value: string,
+	fallback: string,
+) {
 	return options.find((option) => option.value === value)?.label ?? fallback;
 }
 ---
 
-<PageLayout title="荣誉墙" description="记录个人奖状、证书与成长轨迹的荣誉墙">
+<PageLayout title="荣誉墙" description="记录奖项、软著、专利、证书与成长轨迹的荣誉墙">
 	<div class="space-y-4">
-		<section class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-dark-800 dark:shadow-lg md:p-6 lg:p-8">
-			<div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+		<section
+			class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-dark-800 dark:shadow-lg md:p-6 lg:p-8"
+		>
+			<div
+				class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between"
+			>
 				<div class="max-w-3xl">
-					<h1 class="flex items-center gap-3 text-xl font-serif font-bold text-gray-900 dark:text-white md:text-2xl lg:text-3xl">
-						<span class="h-6 w-1.5 rounded-full bg-gradient-to-b from-primary-400 to-primary-600"></span>
+					<h1
+						class="flex items-center gap-3 text-xl font-serif font-bold text-gray-900 dark:text-white md:text-2xl lg:text-3xl"
+					>
+						<span
+							class="h-6 w-1.5 rounded-full bg-gradient-to-b from-primary-400 to-primary-600"
+						></span>
 						荣誉墙
 					</h1>
-					<p class="mt-4 text-sm leading-7 text-gray-600 dark:text-gray-300 md:text-base">
-						这里记录的是一段段认真走过的路。每一张奖状、每一份证书，都对应某个阶段的投入、尝试和回应。
+					<p
+						class="mt-4 text-sm leading-7 text-gray-600 dark:text-gray-300 md:text-base"
+					>
+						这里记录的是一段段认真走过的路。奖项、软著、专利和证书，都对应某个阶段的投入、尝试和回应。
 					</p>
 				</div>
-
 			</div>
 		</section>
 
-		<section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-dark-800 dark:shadow-lg md:p-5">
-			<form method="GET" class="grid items-center gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
-				<div class="relative" data-custom-select-root>
-					<input type="hidden" name="school" value={selectedSchool} data-select-input />
-					<details class="custom-select">
-						<summary class="custom-select__trigger">
-							<span class={`custom-select__label ${selectedSchool ? "is-selected" : ""}`} data-select-label>{getSelectedLabel(schoolOptions, selectedSchool, "学校")}</span>
-							<Icon name="ri:arrow-down-s-line" class="custom-select__arrow" />
-						</summary>
-						<div class="custom-select__menu">
-							{schoolOptions.map((option) => (
-								<button
-									type="button"
-									class={`custom-select__option ${option.value === selectedSchool ? "is-active" : ""}`}
-									data-select-option
-									data-value={option.value}
-									data-label={option.label}
-								>
-									<span>{option.label}</span>
-									<span class="custom-select__check" aria-hidden="true"></span>
-								</button>
-							))}
-						</div>
-					</details>
+		<section
+			class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-dark-800 dark:shadow-lg md:p-5"
+		>
+			<form
+				action="/awards"
+				method="GET"
+				data-awards-filter-form
+				class="space-y-3"
+			>
+				<div class="grid items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+					<div class="relative">
+						<input
+							type="search"
+							name="q"
+							value={keyword}
+							placeholder="搜索标题、类型、级别、年份"
+							class="min-h-[52px] w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-primary-400 focus:ring-4 focus:ring-primary-500/10 dark:border-white/10 dark:bg-dark-800 dark:text-gray-200 dark:focus:border-primary-500/40 dark:focus:ring-primary-500/10"
+						/>
+					</div>
+
+					<button
+						type="submit"
+						class="inline-flex min-h-[52px] items-center justify-center rounded-xl bg-primary-500 px-5 py-3 text-sm font-medium text-white transition hover:bg-primary-600 sm:min-w-[120px]"
+					>
+						搜索
+					</button>
 				</div>
 
-				<div class="relative" data-custom-select-root>
-					<input type="hidden" name="year" value={selectedYearValue} data-select-input />
-					<details class="custom-select">
-						<summary class="custom-select__trigger">
-							<span class={`custom-select__label ${selectedYearValue ? "is-selected" : ""}`} data-select-label>{getSelectedLabel(yearOptions, selectedYearValue, "年份")}</span>
-							<Icon name="ri:arrow-down-s-line" class="custom-select__arrow" />
-						</summary>
-						<div class="custom-select__menu">
-							{yearOptions.map((option) => (
-								<button
-									type="button"
-									class={`custom-select__option ${option.value === selectedYearValue ? "is-active" : ""}`}
-									data-select-option
-									data-value={option.value}
-									data-label={option.label}
+				<div class="grid items-center gap-3 md:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
+					<div class="relative" data-custom-select-root>
+						<input
+							type="hidden"
+							name="type"
+							value={selectedType}
+							data-select-input
+						/>
+						<details class="custom-select">
+							<summary class="custom-select__trigger">
+								<span
+									class={`custom-select__label ${selectedType ? "is-selected" : ""}`}
+									data-select-label
+									data-placeholder="类型"
+									>{getSelectedLabel(typeOptions, selectedType, "类型")}</span
 								>
-									<span>{option.label}</span>
-									<span class="custom-select__check" aria-hidden="true"></span>
-								</button>
-							))}
-						</div>
-					</details>
-				</div>
+								<Icon name="ri:arrow-down-s-line" class="custom-select__arrow" />
+							</summary>
+							<div class="custom-select__menu">
+								{
+									typeOptions.map((option) => (
+										<button
+											type="button"
+											class={`custom-select__option ${option.value === selectedType ? "is-active" : ""}`}
+											data-select-option
+											data-value={option.value}
+											data-label={option.label}
+										>
+											<span>{option.label}</span>
+											<span class="custom-select__check" aria-hidden="true" />
+										</button>
+									))
+								}
+							</div>
+						</details>
+					</div>
 
-				<div class="relative" data-custom-select-root>
-					<input type="hidden" name="level" value={selectedLevel} data-select-input />
-					<details class="custom-select">
-						<summary class="custom-select__trigger">
-							<span class={`custom-select__label ${selectedLevel ? "is-selected" : ""}`} data-select-label>{getSelectedLabel(levelOptions, selectedLevel, "级别")}</span>
-							<Icon name="ri:arrow-down-s-line" class="custom-select__arrow" />
-						</summary>
-						<div class="custom-select__menu">
-							{levelOptions.map((option) => (
-								<button
-									type="button"
-									class={`custom-select__option ${option.value === selectedLevel ? "is-active" : ""}`}
-									data-select-option
-									data-value={option.value}
-									data-label={option.label}
+					<div class="relative" data-custom-select-root>
+						<input
+							type="hidden"
+							name="year"
+							value={selectedYearValue}
+							data-select-input
+						/>
+						<details class="custom-select">
+							<summary class="custom-select__trigger">
+								<span
+									class={`custom-select__label ${selectedYearValue ? "is-selected" : ""}`}
+									data-select-label
+									data-placeholder="年份"
+									>{
+										getSelectedLabel(yearOptions, selectedYearValue, "年份")
+									}</span
 								>
-									<span>{option.label}</span>
-									<span class="custom-select__check" aria-hidden="true"></span>
-								</button>
-							))}
-						</div>
-					</details>
-				</div>
+								<Icon name="ri:arrow-down-s-line" class="custom-select__arrow" />
+							</summary>
+							<div class="custom-select__menu">
+								{
+									yearOptions.map((option) => (
+										<button
+											type="button"
+											class={`custom-select__option ${option.value === selectedYearValue ? "is-active" : ""}`}
+											data-select-option
+											data-value={option.value}
+											data-label={option.label}
+										>
+											<span>{option.label}</span>
+											<span class="custom-select__check" aria-hidden="true" />
+										</button>
+									))
+								}
+							</div>
+						</details>
+					</div>
 
-				<a
-					href="/awards"
-					class="inline-flex min-h-[52px] items-center justify-center rounded-xl border border-gray-200 px-5 py-3 text-sm font-medium text-gray-600 transition hover:border-primary-400 hover:text-primary-600 dark:border-white/10 dark:text-gray-300 dark:hover:border-primary-500/40 dark:hover:text-primary-300"
-				>
-					清空
-				</a>
+					<div class="relative" data-custom-select-root>
+						<input
+							type="hidden"
+							name="level"
+							value={selectedLevel}
+							data-select-input
+						/>
+						<details class="custom-select">
+							<summary class="custom-select__trigger">
+								<span
+									class={`custom-select__label ${selectedLevel ? "is-selected" : ""}`}
+									data-select-label
+									data-placeholder="级别"
+									>{getSelectedLabel(levelOptions, selectedLevel, "级别")}</span
+								>
+								<Icon name="ri:arrow-down-s-line" class="custom-select__arrow" />
+							</summary>
+							<div class="custom-select__menu">
+								{
+									levelOptions.map((option) => (
+										<button
+											type="button"
+											class={`custom-select__option ${option.value === selectedLevel ? "is-active" : ""}`}
+											data-select-option
+											data-value={option.value}
+											data-label={option.label}
+										>
+											<span>{option.label}</span>
+											<span class="custom-select__check" aria-hidden="true" />
+										</button>
+									))
+								}
+							</div>
+						</details>
+					</div>
+
+					<a
+						href="/awards"
+						data-awards-clear
+						class="inline-flex min-h-[52px] items-center justify-center rounded-xl border border-gray-200 px-5 py-3 text-sm font-medium text-gray-600 transition hover:border-primary-400 hover:text-primary-600 dark:border-white/10 dark:text-gray-300 dark:hover:border-primary-500/40 dark:hover:text-primary-300 xl:min-w-[120px]"
+					>
+						清空
+					</a>
+				</div>
 			</form>
 		</section>
 
-		{awards.length > 0 ? (
-			<section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-				{awards.map((award) => (
-					<article class="overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg dark:bg-dark-800 dark:shadow-lg">
-						<button
-							type="button"
-							class="group block w-full cursor-zoom-in text-left transition-all hover:-translate-y-1"
-							data-award-preview-trigger
-							data-image-src={award.imageUrl}
-							data-image-alt={award.title}
-							data-award-title={award.title}
-						>
-							<div class="flex aspect-[4/3] items-center justify-center overflow-hidden bg-gray-100 dark:bg-dark-700">
-								<img
-									src={award.imageUrl}
-									alt={award.title}
-									loading="lazy"
-									class="h-full w-full object-contain object-center bg-white p-2 transition duration-500 group-hover:scale-[1.06] dark:bg-dark-700"
-								/>
-							</div>
-							<div class="px-4 pb-4 pt-3">
-								<h2 class="text-base font-serif font-semibold text-gray-900 dark:text-white">{award.title}</h2>
-								<div class="mt-3 flex flex-wrap gap-2 text-xs">
-									<span class="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-gray-700 dark:border-white/10 dark:bg-dark-700/60 dark:text-gray-300">
-										{award.school}
-									</span>
-									<span class="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-gray-700 dark:border-white/10 dark:bg-dark-700/60 dark:text-gray-300">
-										{award.awardYear}
-									</span>
-									<span class="rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-primary-700 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-200">
-										{award.awardLevel}
-									</span>
-								</div>
-							</div>
-						</button>
-					</article>
-				))}
-			</section>
-		) : (
-			<section class="rounded-xl border border-dashed border-gray-200 bg-white p-10 text-center shadow-sm dark:border-white/10 dark:bg-dark-800 dark:shadow-lg">
-				<div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-300">
-					<Icon name="ri:inbox-archive-line" class="text-2xl" />
-				</div>
-				<p class="mt-4 text-lg font-medium text-gray-900 dark:text-white">当前条件下还没有荣誉记录</p>
-				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">可以换一个筛选条件试试，或者先到后台补充新的荣誉内容。</p>
-			</section>
-		)}
-	</div>
+		<div data-awards-results>
+			{
+				awards.length > 0 ? (
+					<div class="space-y-8">
+						{
+							groupedAwards.map((group) => (
+								<section class="space-y-4">
+									<div class="flex items-center justify-between gap-3">
+										<h2 class="text-lg font-serif font-semibold text-gray-900 dark:text-white">
+											{group.honorType}
+										</h2>
+										<span class="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-500 dark:border-white/10 dark:bg-dark-800 dark:text-gray-400">
+											{group.items.length} 条
+										</span>
+									</div>
+									<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+										{group.items.map((award) => (
+											<article class="overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg dark:bg-dark-800 dark:shadow-lg">
+												<button
+													type="button"
+													class="group flex h-full w-full cursor-zoom-in flex-col text-left transition-all hover:-translate-y-1"
+													data-award-preview-trigger
+													data-image-src={award.imageUrl}
+													data-image-alt={award.title}
+													data-award-title={award.title}
+												>
+													<div class="flex aspect-[4/3] items-center justify-center overflow-hidden bg-gray-100 dark:bg-dark-700">
+														<img
+															src={award.imageUrl}
+															alt={award.title}
+															loading="lazy"
+															class="h-full w-full object-contain object-center bg-white p-2 transition duration-500 group-hover:scale-[1.06] dark:bg-dark-700"
+														/>
+													</div>
+													<div class="flex flex-1 flex-col px-4 pb-4 pt-3">
+														<h3 class="min-h-[3.5rem] text-base font-serif font-semibold leading-7 text-gray-900 dark:text-white">
+															{award.title}
+														</h3>
+														<div class="mt-auto flex min-h-[2rem] items-center gap-2 overflow-hidden pt-3 text-xs">
+															<span class="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+																{award.honorType}
+															</span>
+															<span class="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-gray-700 dark:border-white/10 dark:bg-dark-700/60 dark:text-gray-300">
+																{award.awardYear}
+															</span>
+															{award.awardLevel && (
+																<span class="shrink-0 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-primary-700 dark:border-primary-500/30 dark:bg-primary-500/10 dark:text-primary-200">
+																	{award.awardLevel}
+																</span>
+															)}
+														</div>
+													</div>
+												</button>
+											</article>
+										))}
+									</div>
+								</section>
+							))
+						}
+					</div>
+				) : (
+					<section class="rounded-xl border border-dashed border-gray-200 bg-white p-10 text-center shadow-sm dark:border-white/10 dark:bg-dark-800 dark:shadow-lg">
+						<div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-300">
+							<Icon name="ri:inbox-archive-line" class="text-2xl" />
+						</div>
+						<p class="mt-4 text-lg font-medium text-gray-900 dark:text-white">当前条件下还没有荣誉记录</p>
+						<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">可以换一个筛选条件试试，或者先到后台补充新的荣誉内容。</p>
+					</section>
+				)
+			}
+		</div>
+					</p>
 
-	<div
-		class="award-preview"
-		data-award-preview-modal
-		hidden
-		aria-hidden="true"
-	>
-		<button type="button" class="award-preview__backdrop" data-award-preview-close aria-label="关闭预览"></button>
-		<div class="award-preview__dialog" role="dialog" aria-modal="true" aria-labelledby="award-preview-title">
+	<div class="award-preview" data-award-preview-modal hidden aria-hidden="true">
+		<button
+			type="button"
+			class="award-preview__backdrop"
+			data-award-preview-close
+			aria-label="关闭预览"></button>
+		<div
+			class="award-preview__dialog"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="award-preview-title"
+		>
 			<button
 				type="button"
 				class="award-preview__close"
@@ -196,9 +322,19 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 				<Icon name="ri:close-line" class="text-xl" />
 			</button>
 			<div class="award-preview__frame">
-				<img src="" alt="" data-award-preview-image class="award-preview__image" />
+				<img
+					src=""
+					alt=""
+					data-award-preview-image
+					class="award-preview__image"
+				/>
 			</div>
-			<p id="award-preview-title" class="award-preview__title" data-award-preview-title></p>
+			<p
+				id="award-preview-title"
+				class="award-preview__title"
+				data-award-preview-title
+			>
+			</p>
 		</div>
 	</div>
 </PageLayout>
@@ -230,7 +366,11 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 		font-weight: 500;
 		color: rgb(55 65 81);
 		cursor: pointer;
-		transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+		transition:
+			border-color 0.2s ease,
+			box-shadow 0.2s ease,
+			background-color 0.2s ease,
+			transform 0.2s ease;
 		user-select: none;
 	}
 
@@ -238,7 +378,9 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 	.custom-select__trigger:hover {
 		border-color: rgb(59 130 246);
 		background: rgb(255 255 255);
-		box-shadow: 0 10px 24px rgb(59 130 246 / 0.08), 0 0 0 4px rgb(59 130 246 / 0.08);
+		box-shadow:
+			0 10px 24px rgb(59 130 246 / 0.08),
+			0 0 0 4px rgb(59 130 246 / 0.08);
 		transform: translateY(-1px);
 	}
 
@@ -254,7 +396,9 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 		flex-shrink: 0;
 		font-size: 1.25rem;
 		color: rgb(156 163 175);
-		transition: transform 0.2s ease, color 0.2s ease;
+		transition:
+			transform 0.2s ease,
+			color 0.2s ease;
 	}
 
 	.custom-select[open] .custom-select__arrow {
@@ -295,7 +439,10 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 		color: rgb(51 65 85);
 		text-align: left;
 		cursor: pointer;
-		transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+		transition:
+			background-color 0.18s ease,
+			color 0.18s ease,
+			transform 0.18s ease;
 	}
 
 	.custom-select__option:hover,
@@ -312,7 +459,10 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 		border-radius: 9999px;
 		background: transparent;
 		box-shadow: inset 0 0 0 1.5px rgb(203 213 225);
-		transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+		transition:
+			background-color 0.18s ease,
+			box-shadow 0.18s ease,
+			transform 0.18s ease;
 	}
 
 	.custom-select__option.is-active .custom-select__check {
@@ -334,7 +484,11 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 
 	:global(.dark) .custom-select__trigger {
 		border-color: rgb(255 255 255 / 0.1);
-		background: linear-gradient(180deg, rgb(42 48 64 / 0.95), rgb(35 41 55 / 0.95));
+		background: linear-gradient(
+			180deg,
+			rgb(42 48 64 / 0.95),
+			rgb(35 41 55 / 0.95)
+		);
 		color: rgb(243 244 246);
 	}
 
@@ -342,7 +496,9 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 	:global(.dark) .custom-select__trigger:hover {
 		border-color: rgb(96 165 250 / 0.45);
 		background: rgb(45 55 72 / 0.95);
-		box-shadow: 0 12px 28px rgb(2 6 23 / 0.22), 0 0 0 4px rgb(59 130 246 / 0.12);
+		box-shadow:
+			0 12px 28px rgb(2 6 23 / 0.22),
+			0 0 0 4px rgb(59 130 246 / 0.12);
 	}
 
 	:global(.dark) .custom-select__label {
@@ -435,7 +591,9 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 		color: rgb(55 65 81);
 		cursor: pointer;
 		box-shadow: 0 8px 24px rgb(15 23 42 / 0.12);
-		transition: transform 0.18s ease, background-color 0.18s ease;
+		transition:
+			transform 0.18s ease,
+			background-color 0.18s ease;
 	}
 
 	.award-preview__close:hover {
@@ -503,7 +661,14 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 			const label = root.querySelector("[data-select-label]");
 			const options = root.querySelectorAll("[data-select-option]");
 
-			if (!form || !details || !summary || !input || !label || options.length === 0) {
+			if (
+				!form ||
+				!details ||
+				!summary ||
+				!input ||
+				!label ||
+				options.length === 0
+			) {
 				return;
 			}
 
@@ -530,11 +695,13 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 				if (details.hasAttribute("open")) {
 					details.removeAttribute("open");
 				} else {
-					document.querySelectorAll("[data-custom-select-root] details[open]").forEach((item) => {
-						if (item !== details) {
-							item.removeAttribute("open");
-						}
-					});
+					document
+						.querySelectorAll("[data-custom-select-root] details[open]")
+						.forEach((item) => {
+							if (item !== details) {
+								item.removeAttribute("open");
+							}
+						});
 					details.setAttribute("open", "");
 				}
 			});
@@ -542,7 +709,10 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 			options.forEach((option) => {
 				option.addEventListener("click", () => {
 					const nextValue = option.getAttribute("data-value") ?? "";
-					const nextLabel = option.getAttribute("data-label") ?? option.textContent?.trim() ?? "";
+					const nextLabel =
+						option.getAttribute("data-label") ??
+						option.textContent?.trim() ??
+						"";
 
 					input.value = nextValue;
 					label.textContent = nextLabel;
@@ -590,20 +760,22 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 			document.body.style.overflow = "hidden";
 		};
 
-		document.querySelectorAll("[data-award-preview-trigger]").forEach((trigger) => {
-			if (trigger.dataset.previewBound === "true") {
-				return;
-			}
+		document
+			.querySelectorAll("[data-award-preview-trigger]")
+			.forEach((trigger) => {
+				if (trigger.dataset.previewBound === "true") {
+					return;
+				}
 
-			trigger.dataset.previewBound = "true";
-			trigger.addEventListener("click", () => {
-				openPreview(
-					trigger.getAttribute("data-image-src") ?? "",
-					trigger.getAttribute("data-image-alt") ?? "",
-					trigger.getAttribute("data-award-title") ?? "",
-				);
+				trigger.dataset.previewBound = "true";
+				trigger.addEventListener("click", () => {
+					openPreview(
+						trigger.getAttribute("data-image-src") ?? "",
+						trigger.getAttribute("data-image-alt") ?? "",
+						trigger.getAttribute("data-award-title") ?? "",
+					);
+				});
 			});
-		});
 
 		closeButtons?.forEach((button) => {
 			button.addEventListener("click", closePreview);
@@ -616,8 +788,147 @@ function getSelectedLabel(options: Array<{ value: string; label: string }>, valu
 		});
 	};
 
+	const initAwardsPartialRefresh = () => {
+		const form = document.querySelector("[data-awards-filter-form]");
+		const results = document.querySelector("[data-awards-results]");
+
+		if (!form || !results || form.dataset.partialReady === "true") {
+			return;
+		}
+
+		form.dataset.partialReady = "true";
+
+		const buildUrlFromForm = () => {
+			const url = new URL(form.getAttribute("action") || window.location.pathname, window.location.origin);
+			const formData = new FormData(form);
+
+			for (const [key, value] of formData.entries()) {
+				const normalizedValue = String(value).trim();
+				if (normalizedValue) {
+					url.searchParams.set(key, normalizedValue);
+				}
+			}
+
+			return url;
+		};
+
+		const syncFormWithUrl = (url) => {
+			const keywordInput = form.querySelector('input[name="q"]');
+			if (keywordInput instanceof HTMLInputElement) {
+				keywordInput.value = url.searchParams.get("q") ?? "";
+			}
+
+			document.querySelectorAll("[data-custom-select-root]").forEach((root) => {
+				const input = root.querySelector("[data-select-input]");
+				const label = root.querySelector("[data-select-label]");
+				const options = root.querySelectorAll("[data-select-option]");
+
+				if (!(input instanceof HTMLInputElement) || !(label instanceof HTMLElement)) {
+					return;
+				}
+
+				const nextValue = url.searchParams.get(input.name) ?? "";
+				input.value = nextValue;
+
+				const activeOption = Array.from(options).find(
+					(option) => option.getAttribute("data-value") === nextValue,
+				);
+				label.textContent =
+					activeOption?.getAttribute("data-label") ??
+					label.dataset.placeholder ??
+					"";
+				label.classList.toggle("is-selected", Boolean(nextValue));
+
+				options.forEach((option) => {
+					option.classList.toggle(
+						"is-active",
+						option.getAttribute("data-value") === nextValue,
+					);
+				});
+			});
+		};
+
+		const refreshResults = async (url, replaceHistory = false) => {
+			results.setAttribute("aria-busy", "true");
+			results.style.opacity = "0.55";
+
+			try {
+				const response = await fetch(url, {
+					headers: {
+						"X-Requested-With": "awards-partial",
+					},
+				});
+
+				if (!response.ok) {
+					window.location.href = url;
+					return;
+				}
+
+				const html = await response.text();
+				const doc = new DOMParser().parseFromString(html, "text/html");
+				const nextResults = doc.querySelector("[data-awards-results]");
+
+				if (!nextResults) {
+					window.location.href = url;
+					return;
+				}
+
+				results.innerHTML = nextResults.innerHTML;
+				if (replaceHistory) {
+					window.history.replaceState({}, "", url);
+				} else {
+					window.history.pushState({}, "", url);
+				}
+				initAwardPreview();
+			} finally {
+				results.style.opacity = "";
+				results.removeAttribute("aria-busy");
+			}
+		};
+
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			await refreshResults(buildUrlFromForm().toString());
+		});
+
+		form.addEventListener("click", async (event) => {
+			const clearLink = event.target.closest("[data-awards-clear]");
+			if (!(clearLink instanceof HTMLAnchorElement)) {
+				return;
+			}
+
+			event.preventDefault();
+			const url = new URL(clearLink.href, window.location.origin);
+			syncFormWithUrl(url);
+			await refreshResults(url.toString());
+		});
+
+		results.addEventListener("click", async (event) => {
+			const link = event.target.closest("a[href]");
+			if (!(link instanceof HTMLAnchorElement)) {
+				return;
+			}
+
+			const url = new URL(link.href, window.location.origin);
+			if (url.origin !== window.location.origin || url.pathname !== "/awards") {
+				return;
+			}
+
+			event.preventDefault();
+			await refreshResults(url.toString());
+		});
+
+		window.addEventListener("popstate", async () => {
+			const url = new URL(window.location.href);
+			syncFormWithUrl(url);
+			await refreshResults(url.toString(), true);
+		});
+	};
+
 	initCustomSelects();
 	initAwardPreview();
+	initAwardsPartialRefresh();
 	document.addEventListener("astro:page-load", initCustomSelects);
 	document.addEventListener("astro:page-load", initAwardPreview);
+	document.addEventListener("astro:page-load", initAwardsPartialRefresh);
 </script>
