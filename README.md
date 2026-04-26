@@ -1,189 +1,253 @@
-# 秋兰以为佩 - 个人技术博客
+# 秋兰以为佩
 
-这是一个基于 [Astro](https://astro.build/) 构建的现代化个人技术博客。追求简约、深邃与沉浸式的阅读体验。项目采用响应式设计，完美适配桌面端与移动端，并内置了丰富的功能模块，适合用于记录技术心得、生活感悟和项目展示。
+基于 [Astro](https://astro.build/) 构建的个人博客与内容展示项目，面向文章发布、作品展示与后台内容维护场景。项目采用服务端渲染架构，集成博客内容管理、荣誉墙展示、后台登录、奖项资料录入与 OCR 辅助识别等能力，适合作为个人站点或课程项目的实现基础。
 
-![Project Preview](/public/images/image.png)
+![项目预览](./public/images/image.png)
 
-## ✨ 核心特色
+## 项目简介
 
-- **极致性能**：基于 Astro 静态站点生成 (SSG)，零 JavaScript 运行时开销（除了交互组件），首屏加载极快，SEO 友好。
-- **现代化设计**：
-  - **深色模式**：默认采用深色主题，提供舒适的沉浸式阅读体验。
-  - **响应式布局**：精心调优的移动端与桌面端适配，侧边栏自动隐藏/显示。
-  - **平滑过渡**：支持 View Transitions API，页面切换流畅丝滑。
-- **丰富组件**：
-  - **个人卡片**：展示头像、昵称、个性签名及社交链接。
-  - **文章目录**：自动生成文章目录 (TOC)，支持点击跳转。
-  - **数据统计**：实时展示文章数量、标签数量等站点统计信息。
-  - **视频支持**：内置自定义视频播放器，支持 MP4 播放。
-- **强大技术栈**：
-  - **核心框架**: Astro 4.0
-  - **UI 组件**: React 18 (用于交互组件)
-  - **样式系统**: Tailwind CSS (原子化 CSS)
-  - **图标系统**: Iconify (海量图标支持)
-  - **类型安全**: TypeScript 全面覆盖
+本项目以个人博客为核心，围绕内容发布与个人展示构建完整站点能力，主要包括以下部分：
 
-## 🛠️ 目录结构
+- 博客首页、归档页、分类页、标签页与文章详情页
+- 响应式界面与深色主题阅读体验
+- 基于 Astro Content Collection 的文章管理方式
+- 后台登录与会话控制
+- 荣誉墙展示、检索与分类浏览
+- 奖项图片或 PDF 上传、服务端 OCR 识别与信息辅助录入
+- 基于 LibSQL / SQLite 的数据存储方案
+
+## 主要功能
+
+### 1. 内容展示
+
+- 支持 Markdown / MDX 文章编写
+- 支持文章分类、标签、归档与分页浏览
+- 支持文章目录、卡片列表、站点基础统计等页面组件
+- 支持图片与视频资源展示
+
+### 2. 后台管理
+
+- 提供后台登录与会话校验能力
+- 提供文档管理入口，用于统一查看内容集合中的文章
+- 提供荣誉墙管理页面，支持新增、编辑、删除与筛选
+
+### 3. 荣誉墙与 OCR 录入
+
+- 支持按荣誉类型、年份、级别与关键词筛选
+- 支持上传图片或 PDF 证书文件
+- 服务端会对上传文件进行预处理，并调用 OCR 脚本输出候选识别结果
+- 支持从识别结果中辅助填写竞赛名称、奖项名称等结构化信息
+
+## 技术栈
+
+### 前端与站点框架
+
+- Astro 4
+- React 18
+- Tailwind CSS
+- TypeScript
+- astro-icon
+
+### 内容与渲染
+
+- Astro Content Collections
+- MDX
+- `remark-directive`
+
+### 服务端与数据层
+
+- `@libsql/client`
+- SQLite / LibSQL
+- Node.js SSR
+- Netlify Adapter
+
+### 文件处理与 OCR
+
+- `sharp`
+- `pdfjs-dist`
+- `@napi-rs/canvas`
+- `onnxruntime-web`
+- Python `RapidOCR`
+
+## 目录结构
 
 ```text
-├── public/              # 静态资源 (图片、视频、favicon 等)
+.
+├── public/                     # 静态资源与 OCR 模型文件
+├── scripts/                    # 服务端调用的辅助脚本
 ├── src/
-│   ├── components/      # UI 组件
-│   │   ├── widgets/     # 侧边栏小组件 (ProfileCard, StatsCard 等)
-│   │   ├── ArticleCard.astro  # 文章列表卡片
-│   │   ├── Navbar.astro       # 顶部导航栏
-│   │   └── ...
-│   ├── content/         # 内容集合
-│   │   ├── posts/       # Markdown 文章源文件
-│   │   └── config.ts    # 内容集合 Schema 定义
-│   ├── layouts/         # 页面布局 (BaseLayout, PageLayout)
-│   ├── pages/           # 路由页面 (index, about, posts/[...slug])
-│   └── styles/          # 全局样式
-├── astro.config.mjs     # Astro 配置文件
-├── tailwind.config.mjs  # Tailwind 配置文件
-└── package.json         # 项目依赖与脚本
+│   ├── components/             # 页面组件与后台壳组件
+│   ├── content/
+│   │   └── posts/              # Markdown / MDX 文章内容
+│   ├── layouts/                # 页面布局
+│   ├── lib/                    # 业务逻辑、数据库、鉴权与 OCR 处理
+│   ├── pages/                  # 路由页面与 API 路由
+│   └── styles/                 # 全局样式
+├── astro.config.mjs            # Astro 配置
+├── netlify.toml                # Netlify 构建配置
+├── package.json                # 依赖与脚本定义
+└── README.md
 ```
 
-## 🚀 快速开始
+## 运行要求
 
-### 1. 环境准备
+### Node.js 环境
 
-确保你的本地环境已安装：
+- 建议使用 Node.js 20 或以上版本
+- 可使用 `npm` 或 `pnpm` 作为包管理器
 
-- [Node.js](https://nodejs.org/) (推荐 v18 或 v20+)
-- 包管理器 (npm, yarn, 或 pnpm)
+### Python 环境
 
-### 2. 安装与运行
+OCR 功能依赖 Python 运行时。若仅使用博客展示与后台基础能力，可不启用 OCR；若需要使用奖项识别功能，请准备可用的 Python 环境，并确保命令行中可执行 `python`。
+
+建议安装以下 Python 依赖：
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/fuxuanyue520/blog.git
-cd blog
-
-# 2. 安装依赖
-npm install
-# 或者使用 pnpm
-# pnpm install
-
-# 3. 可选：配置数据库连接
-cp .env.example .env
-
-# 4. 启动开发服务器
-npm run dev
-# 访问 http://localhost:4321
+pip install numpy opencv-python rapidocr_onnxruntime
 ```
 
-### 3. 构建发布
+如果本地 Python 路径不在默认环境变量中，可通过环境变量 `PYTHON_PATH` 指定解释器路径。
+
+## 本地开发
+
+### 1. 安装依赖
+
+```bash
+git clone https://github.com/fuxuanyue520/blog.git
+cd blog
+npm install
+```
+
+如需使用 `pnpm`，可执行：
+
+```bash
+pnpm install
+```
+
+### 2. 配置环境变量
+
+项目提供了 `.env.example` 作为环境变量模板：
+
+```env
+LIBSQL_URL=
+LIBSQL_AUTH_TOKEN=
+```
+
+默认情况下，未配置远程数据库时，项目会自动在本地 `data/` 目录下创建 SQLite 数据库文件，无需额外初始化。
+
+### 3. 启动开发服务
+
+```bash
+npm run dev
+```
+
+默认访问地址：
+
+```text
+http://localhost:4321
+```
+
+## 构建与部署
+
+### 本地构建
 
 ```bash
 npm run build
 ```
 
-构建产物将输出到 `dist/` 目录。
+项目使用 Astro 的服务端输出模式，构建产物位于 `dist/`，部署目标需要支持 SSR 运行。
 
-> 当前项目已启用 Astro SSR 以支持后台登录，因此部署目标需要支持服务端运行能力。当前配置已接入 Netlify Adapter，也可按需切换到其他 Astro SSR 平台。
+### Netlify 部署
 
-## 🔐 后台管理系统
+当前仓库已提供 `netlify.toml`，默认构建配置如下：
 
-项目现已内置一个最小可用的后台登录系统。
+- 构建命令：`pnpm run build`
+- 发布目录：`dist`
+- Node 版本：`20`
 
-- **登录地址**: `/admin/login`
-- **后台首页**: `/admin`
-- **默认用户名**: `admin`
-- **默认密码**: `admin123`
-
-### 密码与会话安全
-
-- 默认管理员账号会在首次启动时自动写入数据库
-- 密码不会明文保存，而是以带盐 `scrypt` 哈希形式存储
-- 登录成功后会写入 `HttpOnly` 会话 Cookie
-- 会话记录保存在数据库中的 `admin_sessions` 表
-
-### 数据库配置
-
-项目默认使用本地 SQLite 文件数据库，无需额外配置：
-
-- **默认数据库文件**: `data/admin.db`
-- **默认行为**: 应用启动时自动创建库表并初始化管理员账号
-
-如果你想改用 Turso / LibSQL 远程数据库，可在 `.env` 中配置：
+如果部署时使用远程 LibSQL / Turso 数据库，请在平台环境变量中配置：
 
 ```env
 LIBSQL_URL=libsql://your-database.turso.io
 LIBSQL_AUTH_TOKEN=your-token
 ```
 
-### 注意事项
+## 后台说明
 
-- 首次登录后，建议尽快把默认账号密码改成你自己的
-- `data/` 已加入 `.gitignore`，本地数据库文件不会被提交
-- 如果你部署到 Netlify，请在平台环境变量中配置 `LIBSQL_URL` 与 `LIBSQL_AUTH_TOKEN`
+### 登录入口
 
-## ⚙️ 个性化配置指南
+- 登录页：`/admin/login`
+- 后台首页：`/admin`
 
-### 1. 修改个人信息 (头像/昵称/社交链接)
+当前后台首页会重定向至：
 
-个人信息主要集中在 **左侧边栏的个人卡片** 中。
+- 文档管理：`/admin/documents`
 
-- **文件位置**: `src/components/widgets/ProfileCard.astro`
-- **如何修改**:
-  - **头像**: 将你的头像图片放入 `public/` 目录 (例如 `avatar.jpg`)，然后在 `ProfileCard.astro` 中修改 `<img>` 标签的 `src` 属性。
-  - **昵称**: 修改 `<h2>` 标签内的文本。
-  - **签名**: 修改 `<p>` 标签内的文本。
-  - **社交链接**: 修改底部的 `<a>` 标签，替换 `href` 为你的 GitHub、Bilibili 或 邮箱地址。
+### 默认管理员账户
 
-### 2. 修改导航栏菜单
+项目首次启动时会自动初始化管理员账户：
 
-- **文件位置**: `src/components/Navbar.astro`
-- **如何修改**: 找到 `navItems` 数组或对应的 `<a>` 标签，修改链接文本和 `href` 路径。
+- 用户名：`admin`
+- 密码：`admin123`
 
-### 3. 更换 Banner 图片
+密码以带盐哈希形式存储，不以明文保存。登录成功后，系统将通过 `HttpOnly` Cookie 维护会话。
 
-首页顶部的 Banner 图片可以在组件中替换。
+出于安全考虑，建议在首次部署后尽快替换默认登录凭据。
 
-- **文件位置**: `src/components/Banner.astro`
-- **如何修改**: 替换 `src` 属性引用的图片路径 (建议放在 `public/` 下)。
+## 荣誉墙数据说明
 
-## 📝 撰写文章
+荣誉墙相关数据存储于数据库 `award_certificates` 表中，当前结构化字段主要包括：
 
-文章内容存储在 `src/content/posts/` 目录下，支持 Markdown 和 MDX 格式。
+- `honor_type`
+- `competition_name`
+- `award_name`
+- `award_year`
+- `award_level`
+- `description`
+- `image_name`
+- `image_mime_type`
+- `image_base64`
 
-### 1. 创建文章
+系统已包含旧数据兼容迁移逻辑，可在应用初始化时自动补齐部分字段并修正历史表结构。
 
-在 `src/content/posts/` 下新建一个 `.md` 文件，例如 `my-first-post.md`。
+## 文章编写
 
-### 2. 填写 Frontmatter
+文章内容位于 `src/content/posts/` 目录，支持 Markdown 与 MDX。
 
-文件头部必须包含 Frontmatter 信息，用于定义文章元数据：
+示例 Frontmatter：
 
 ```markdown
 ---
-title: "我的第一篇文章"
-description: "这是文章的简短描述，会显示在列表卡片中"
-publishedAt: "2023-12-22"
-updatedAt: "2023-12-23" # 可选
-category: "tech" # 必填，可选值: tech (技术), essay (随笔), project (项目), other (其他)
-tags: ["Astro", "Blog"] # 标签列表
-coverImage: "/images/cover.jpg" # 可选，文章封面图
-isPinned: false # 是否置顶
-draft: false # 是否为草稿 (true 则不会在生产环境显示)
+title: "文章标题"
+description: "文章摘要"
+publishedAt: "2024-01-01"
+updatedAt: "2024-01-02"
+category: "tech"
+tags: ["Astro", "Blog"]
+coverImage: "/images/cover.jpg"
+isPinned: false
+draft: false
 ---
 
-这里是文章正文...
+正文内容
 ```
 
-### 3. 使用图片和视频
+说明：
 
-- **图片**: 将图片放在 `public/images/` (需自行创建) 下，在 Markdown 中使用 `![描述](/images/my-pic.jpg)` 引用。
-- **视频**: 将视频放在 `public/videos/` 下，可以使用 HTML 标签或自定义组件引入。
+- `updatedAt` 为可选字段
+- `draft: true` 表示文章在生产环境中不公开展示
+- 图片建议放置在 `public/images/` 目录中引用
 
-## 🎨 样式定制
+## 自定义与二次开发
 
-项目使用 Tailwind CSS 进行样式管理。
+若需继续调整站点内容或界面，通常可从以下位置开始：
 
-- **全局颜色/字体**: 修改 `tailwind.config.mjs` 中的 `theme.extend` 配置。
-- **全局 CSS**: 修改 `src/styles/global.css` (如果存在) 或直接在 Layout 中引入的样式。
+- `src/components/Navbar.astro`：顶部导航
+- `src/components/widgets/`：侧边栏组件
+- `src/pages/`：页面路由
+- `src/styles/global.css`：全局样式
+- `src/content/posts/`：文章内容
 
-## 🤝 贡献与支持
+## 说明
 
-如果你喜欢这个项目，欢迎 Star ⭐️ 或提交 PR！
+本项目当前同时包含博客展示与后台管理能力，适合作为个人主页、课程展示项目或个人作品站的基础模板使用。如需进一步扩展，可继续补充用户管理、文件上传存储、评论系统或更完整的后台编辑能力。
