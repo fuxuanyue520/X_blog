@@ -59,7 +59,7 @@
 - `@libsql/client`
 - SQLite / LibSQL
 - Node.js SSR
-- Netlify Adapter
+- Node Adapter
 
 ### 文件处理与 OCR
 
@@ -84,7 +84,6 @@
 │   ├── pages/                  # 路由页面与 API 路由
 │   └── styles/                 # 全局样式
 ├── astro.config.mjs            # Astro 配置
-├── netlify.toml                # Netlify 构建配置
 ├── package.json                # 依赖与脚本定义
 └── README.md
 ```
@@ -93,7 +92,7 @@
 
 ### Node.js 环境
 
-- 建议使用 Node.js 20 或以上版本
+- 建议使用 Node.js 20 LTS（建议不要使用 Node.js 24，Windows 下可能出现 `EBADF: bad file descriptor, watch` 文件监听异常）
 - 可使用 `npm` 或 `pnpm` 作为包管理器
 
 ### Python 环境
@@ -157,13 +156,9 @@ npm run build
 
 项目使用 Astro 的服务端输出模式，构建产物位于 `dist/`，部署目标需要支持 SSR 运行。
 
-### Netlify 部署
+### Render 部署
 
-当前仓库已提供 `netlify.toml`，默认构建配置如下：
-
-- 构建命令：`pnpm run build`
-- 发布目录：`dist`
-- Node 版本：`20`
+推荐使用 Render Web Service（Docker）部署，构建与启动由 `Dockerfile` 统一管理。
 
 如果部署时使用远程 LibSQL / Turso 数据库，请在平台环境变量中配置：
 

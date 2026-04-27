@@ -2,7 +2,7 @@ import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import tailwind from "@astrojs/tailwind";
 import mdx from "@astrojs/mdx";
-import netlify from "@astrojs/netlify";
+import node from "@astrojs/node";
 import icon from "astro-icon";
 import remarkDirective from "remark-directive";
 import { visit } from "unist-util-visit";
@@ -69,16 +69,25 @@ export default defineConfig({
 		}),
 	],
 	output: "server",
-	adapter: netlify(),
+	adapter: node({
+		mode: "standalone",
+	}),
 	markdown: {
 		remarkPlugins: [remarkDirective, remarkAdmonitions],
 	},
-	site: "https://xuanzai-blog.netlify.app",
 	compressHTML: true,
 	build: {
 		inlineStylesheets: "auto",
 	},
 	vite: {
+		server: {
+			watch: {
+				// Node 24 + Windows occasionally throws EBADF with fs.watch.
+				// Polling avoids relying on native watcher handles.
+				usePolling: true,
+				interval: 300,
+			},
+		},
 		build: {
 			cssCodeSplit: true,
 		},
