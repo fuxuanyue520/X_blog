@@ -1,16 +1,36 @@
 import { createClient, type Client } from "@libsql/client";
 import matter from "gray-matter";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	renameSync,
+} from "node:fs";
 import path from "node:path";
 import { hashPassword } from "@/lib/security";
 
 let dbClient: Client | undefined;
 let dbPromise: Promise<Client> | undefined;
-const LEGACY_POSTS_DIRECTORY = path.join(process.cwd(), "src", "content", "posts");
+const LEGACY_POSTS_DIRECTORY = path.join(
+	process.cwd(),
+	"src",
+	"content",
+	"posts",
+);
+
+function getLibsqlUrl() {
+	return process.env.LIBSQL_URL || import.meta.env.LIBSQL_URL;
+}
+
+function getLibsqlAuthToken() {
+	return process.env.LIBSQL_AUTH_TOKEN || import.meta.env.LIBSQL_AUTH_TOKEN;
+}
 
 function getDatabaseUrl() {
-	if (import.meta.env.LIBSQL_URL) {
-		return import.meta.env.LIBSQL_URL;
+	const remoteUrl = getLibsqlUrl();
+	if (remoteUrl) {
+		return remoteUrl;
 	}
 
 	const dataDir = path.join(process.cwd(), "data");
@@ -30,7 +50,7 @@ function createDatabaseClient() {
 	if (!dbClient) {
 		dbClient = createClient({
 			url: getDatabaseUrl(),
-			authToken: import.meta.env.LIBSQL_AUTH_TOKEN,
+			authToken: getLibsqlAuthToken(),
 		});
 	}
 
@@ -78,12 +98,14 @@ function padDatePart(value: number) {
 }
 
 function toLocalDateTimeString(date: Date) {
-	return [
-		date.getFullYear(),
-		padDatePart(date.getMonth() + 1),
-		padDatePart(date.getDate()),
-	].join("-") +
-		`T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
+	return (
+		[
+			date.getFullYear(),
+			padDatePart(date.getMonth() + 1),
+			padDatePart(date.getDate()),
+		].join("-") +
+		`T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`
+	);
 }
 
 function parseDateTimeValue(value: string) {
@@ -127,9 +149,7 @@ function normalizeLegacyDateTimeValue(value: unknown) {
 
 function normalizeLegacyTags(value: unknown) {
 	if (Array.isArray(value)) {
-		return value
-			.map((item) => String(item ?? "").trim())
-			.filter(Boolean);
+		return value.map((item) => String(item ?? "").trim()).filter(Boolean);
 	}
 
 	return String(value ?? "")
@@ -151,7 +171,8 @@ function normalizeLegacySlugCandidate(value: string) {
 
 function normalizeLegacyArticleSlug(value: string, fallbackSource = "") {
 	const normalized =
-		normalizeLegacySlugCandidate(value) || normalizeLegacySlugCandidate(fallbackSource);
+		normalizeLegacySlugCandidate(value) ||
+		normalizeLegacySlugCandidate(fallbackSource);
 	return normalized || `post-${Date.now()}`;
 }
 
@@ -160,7 +181,11 @@ function toLegacyBoolean(value: unknown) {
 		return value;
 	}
 
-	return String(value ?? "").trim().toLowerCase() === "true";
+	return (
+		String(value ?? "")
+			.trim()
+			.toLowerCase() === "true"
+	);
 }
 
 async function migrateLegacyMarkdownArticles(db: Client) {
@@ -178,8 +203,12 @@ async function migrateLegacyMarkdownArticles(db: Client) {
 		const parsed = matter(raw);
 		const data = parsed.data as Record<string, unknown>;
 		const fallbackSlug = entry.name.replace(/\.(md|markdown)$/i, "");
-		const title = String(data.title ?? "").trim() || fallbackSlug || "未命名文章";
-		const slug = normalizeLegacyArticleSlug(String(data.slug ?? fallbackSlug), title);
+		const title =
+			String(data.title ?? "").trim() || fallbackSlug || "未命名文章";
+		const slug = normalizeLegacyArticleSlug(
+			String(data.slug ?? fallbackSlug),
+			title,
+		);
 		const category = ["tech", "essay", "project", "other"].includes(
 			String(data.category ?? "").trim(),
 		)
@@ -188,7 +217,8 @@ async function migrateLegacyMarkdownArticles(db: Client) {
 		const publishedAt =
 			normalizeLegacyDateTimeValue(data.publishedAt) ||
 			new Date().toISOString().slice(0, 19);
-		const articleUpdatedAt = normalizeLegacyDateTimeValue(data.updatedAt) || null;
+		const articleUpdatedAt =
+			normalizeLegacyDateTimeValue(data.updatedAt) || null;
 		const tags = JSON.stringify(normalizeLegacyTags(data.tags));
 		const coverImage = String(data.coverImage ?? "").trim() || null;
 		const body = parsed.content.replace(/^\uFEFF/, "").trim();
@@ -267,7 +297,8 @@ async function migrateAwardCertificateSchema(db: Client) {
 		const title = String(row.title ?? "");
 		const honorType = String(row.honor_type ?? "").trim() || "奖项";
 		const fallback = splitLegacyAwardTitle(title);
-		const competitionName = String(row.competition_name ?? "").trim() || fallback.competitionName;
+		const competitionName =
+			String(row.competition_name ?? "").trim() || fallback.competitionName;
 		const awardName = String(row.award_name ?? "").trim() || fallback.awardName;
 
 		await db.execute({
@@ -332,7 +363,9 @@ async function migrateAwardCertificateSchema(db: Client) {
 			FROM award_certificates
 		`);
 		await db.execute("DROP TABLE award_certificates");
-		await db.execute("ALTER TABLE award_certificates__new RENAME TO award_certificates");
+		await db.execute(
+			"ALTER TABLE award_certificates__new RENAME TO award_certificates",
+		);
 	}
 }
 
