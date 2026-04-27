@@ -29,6 +29,7 @@ const selectedType = Astro.url.searchParams.get("type")?.trim() ?? "";
 const selectedYearValue = Astro.url.searchParams.get("year")?.trim() ?? "";
 const selectedLevel = Astro.url.searchParams.get("level")?.trim() ?? "";
 const selectedYear = selectedYearValue ? Number(selectedYearValue) : undefined;
+const currentYear = new Date().getFullYear();
 
 const statusMessages: Record<string, string> = {
 	created: "荣誉记录已成功添加到荣誉墙。",
@@ -65,8 +66,9 @@ const activeFilters = {
 	awardLevel: selectedLevel || undefined,
 };
 
-const [awards, editingAward, filterOptions] = await Promise.all([
+const [awards, allAwards, editingAward, filterOptions] = await Promise.all([
 	listAwards(activeFilters),
+	listAwards(),
 	Number.isInteger(editId) && editId > 0
 		? getAwardById(editId)
 		: Promise.resolve(null),
@@ -97,13 +99,135 @@ function getSelectedLabel(
 	return options.find((option) => option.value === value)?.label ?? fallback;
 }
 
+function buildCountItems(values: string[]) {
+	const counts = new Map<string, number>();
+
+	for (const value of values) {
+		const normalized = value.trim();
+		if (!normalized) {
+			continue;
+		}
+		counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+	}
+
+	return Array.from(counts.entries())
+		.map(([label, count]) => ({ label, count }))
+		.sort(
+			(left, right) =>
+				right.count - left.count ||
+				left.label.localeCompare(right.label, "zh-CN"),
+		);
+}
+
+function buildTypeSummary(items: typeof allAwards) {
+	return HONOR_TYPES.map((type) => ({
+		label: type,
+		count: items.filter((award) => award.honorType === type).length,
+	})).filter((item) => item.count > 0);
+}
+
+function buildLevelSummary(items: typeof allAwards) {
+	const known = AWARD_LEVELS.map((level) => ({
+		label: level,
+		count: items.filter((award) => award.awardLevel === level).length,
+	})).filter((item) => item.count > 0);
+	const extras = buildCountItems(
+		items
+			.map((award) => award.awardLevel)
+			.filter(
+				(level) =>
+					level &&
+					!AWARD_LEVELS.includes(level as (typeof AWARD_LEVELS)[number]),
+			),
+	);
+
+	return [...known, ...extras];
+}
+
+function buildYearSummary(items: typeof allAwards) {
+	return buildCountItems(items.map((award) => String(award.awardYear))).sort(
+		(left, right) =>
+			Number(right.label) - Number(left.label) || right.count - left.count,
+	);
+}
+
+const totalAwards = allAwards.length;
+const currentYearAwardsCount = allAwards.filter(
+	(award) => award.awardYear === currentYear,
+).length;
+const allTypeSummary = buildTypeSummary(allAwards).sort(
+	(left, right) =>
+		right.count - left.count || left.label.localeCompare(right.label),
+);
+const allLevelSummary = buildLevelSummary(allAwards);
+const yearSummary = buildYearSummary(allAwards);
+const recentYearSummary = yearSummary.slice(0, 5).reverse();
+const dominantType = allTypeSummary[0];
+const maxWaveCount = Math.max(
+	...recentYearSummary.map((item) => item.count),
+	0,
+);
+const lineChartWidth = 220;
+const lineChartHeight = 88;
+const lineChartPadding = { top: 16, right: 10, bottom: 18, left: 10 };
+const lineChartInnerWidth =
+	lineChartWidth - lineChartPadding.left - lineChartPadding.right;
+const lineChartInnerHeight =
+	lineChartHeight - lineChartPadding.top - lineChartPadding.bottom;
+const wavePoints = recentYearSummary.map((item, index) => {
+	const x =
+		recentYearSummary.length > 1
+			? lineChartPadding.left +
+				(index / (recentYearSummary.length - 1)) * lineChartInnerWidth
+			: lineChartPadding.left + lineChartInnerWidth / 2;
+	const normalizedHeight =
+		maxWaveCount > 0 ? (item.count / maxWaveCount) * lineChartInnerHeight : 0;
+
+	return {
+		...item,
+		x,
+		y: lineChartHeight - lineChartPadding.bottom - normalizedHeight,
+	};
+});
+const wavePath = wavePoints
+	.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+	.join(" ");
+const waveAreaPath =
+	wavePoints.length > 0
+		? `${wavePath} L ${wavePoints[wavePoints.length - 1]?.x ?? lineChartWidth} ${lineChartHeight - lineChartPadding.bottom} L ${wavePoints[0]?.x ?? 0} ${lineChartHeight - lineChartPadding.bottom} Z`
+		: "";
+const levelChartColors = [
+	"#38bdf8",
+	"#818cf8",
+	"#22c55e",
+	"#f59e0b",
+	"#f472b6",
+	"#fb7185",
+];
+const pieRadius = 28;
+const pieCircumference = 2 * Math.PI * pieRadius;
+let pieOffset = 0;
+const levelPieSegments = allLevelSummary.map((item, index) => {
+	const ratio = totalAwards > 0 ? item.count / totalAwards : 0;
+	const segment = pieCircumference * ratio;
+	const currentOffset = pieOffset;
+	pieOffset -= segment;
+
+	return {
+		...item,
+		color: levelChartColors[index % levelChartColors.length],
+		ratio,
+		dashArray: `${segment} ${pieCircumference - segment}`,
+		dashOffset: currentOffset,
+	};
+});
+
 const shouldOpenEditModal = Boolean(editingAward);
 const shouldOpenCreateModal =
 	status === "error" && !shouldOpenEditModal && code !== "invalid_award";
-const currentYear = new Date().getFullYear();
 ---
 
-<BaseLayout title="荣誉墙管理" description="后台管理奖项、软著、专利与证书">
+<BaseLayout title="荣誉管理" description="后台管理奖项、软著、专利与证书">
 	<AdminShell activeSection="awards">
 		{
 			feedbackMessage && (
@@ -118,6 +242,227 @@ const currentYear = new Date().getFullYear();
 				</div>
 			)
 		}
+
+		<section
+			class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5"
+		>
+			<div>
+				<div>
+					<h2 class="mt-2 text-xl font-semibold text-white md:text-2xl">
+						荣誉汇总
+					</h2>
+				</div>
+			</div>
+
+			<div class="mt-4 grid gap-3 xl:grid-cols-3">
+				<div class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5">
+					<div class="flex items-center justify-between gap-3">
+						<h3 class="text-sm font-semibold text-white">类型分布</h3>
+						<span class="text-xs text-gray-500">按数量降序</span>
+					</div>
+					<p class="mt-1 text-xs text-gray-500">
+						共 {totalAwards} 条
+					</p>
+					<div class="mt-3 space-y-2">
+						{
+							allTypeSummary.length > 0 ? (
+								allTypeSummary.map((item) => (
+									<div class="space-y-1.5">
+										<div class="flex items-center justify-between gap-3 text-[13px]">
+											<span class="truncate text-gray-200">{item.label}</span>
+											<span class="shrink-0 text-gray-400">
+												{item.count} 条
+											</span>
+										</div>
+										<div class="h-1.5 overflow-hidden rounded-full bg-white/5">
+											<div
+												class="h-full rounded-full bg-gradient-to-r from-primary-400 to-cyan-300"
+												style={`width: ${totalAwards > 0 ? (item.count / totalAwards) * 100 : 0}%`}
+											/>
+										</div>
+									</div>
+								))
+							) : (
+								<p class="text-sm text-gray-500">暂无荣誉数据</p>
+							)
+						}
+					</div>
+				</div>
+
+				<div class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5">
+					<div class="flex items-center justify-between gap-3">
+						<h3 class="text-sm font-semibold text-white">年份走势</h3>
+						<span class="text-xs text-gray-500">最近 5 年</span>
+					</div>
+					<div class="mt-2">
+						{
+							recentYearSummary.length > 0 ? (
+								<div class="rounded-2xl border border-white/10 bg-dark-950/40 p-2.5">
+									<svg
+										viewBox={`0 0 ${lineChartWidth} ${lineChartHeight}`}
+										preserveAspectRatio="xMidYMid meet"
+										class="aspect-[2.2/1] w-full"
+										aria-label="荣誉年份走势波形图"
+									>
+										<defs>
+											<linearGradient
+												id="awards-wave-fill"
+												x1="0"
+												x2="0"
+												y1="0"
+												y2="1"
+											>
+												<stop offset="0%" stop-color="rgb(56 189 248 / 0.35)" />
+												<stop
+													offset="100%"
+													stop-color="rgb(56 189 248 / 0.02)"
+												/>
+											</linearGradient>
+											<linearGradient
+												id="awards-wave-line"
+												x1="0"
+												x2="1"
+												y1="0"
+												y2="0"
+											>
+												<stop offset="0%" stop-color="rgb(34 211 238)" />
+												<stop offset="100%" stop-color="rgb(96 165 250)" />
+											</linearGradient>
+										</defs>
+										<line
+											x1={lineChartPadding.left}
+											y1={lineChartHeight - lineChartPadding.bottom}
+											x2={lineChartWidth - lineChartPadding.right}
+											y2={lineChartHeight - lineChartPadding.bottom}
+											stroke="rgb(255 255 255 / 0.08)"
+											stroke-width="0.8"
+										/>
+										{wavePoints.map((point) => (
+											<line
+												x1={point.x}
+												y1={lineChartPadding.top}
+												x2={point.x}
+												y2={lineChartHeight - lineChartPadding.bottom}
+												stroke="rgb(255 255 255 / 0.06)"
+												stroke-width="0.6"
+											/>
+										))}
+										{waveAreaPath && (
+											<path d={waveAreaPath} fill="url(#awards-wave-fill)" />
+										)}
+										{wavePath && (
+											<path
+												d={wavePath}
+												fill="none"
+												stroke="url(#awards-wave-line)"
+												stroke-width="2.2"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										)}
+										{wavePoints.map((point) => (
+											<g>
+												<circle
+													cx={point.x}
+													cy={point.y}
+													r="2.2"
+													fill="rgb(125 211 252)"
+													stroke="rgb(15 23 42)"
+													stroke-width="0.9"
+												/>
+												<text
+													x={point.x}
+													y={Math.max(point.y - 6, 10)}
+													text-anchor="middle"
+													font-size="7"
+													fill="rgb(226 232 240)"
+												>
+													{point.count}
+												</text>
+												<text
+													x={point.x}
+													y={lineChartHeight - 4}
+													text-anchor="middle"
+													font-size="6.5"
+													fill="rgb(148 163 184)"
+												>
+													{point.label}
+												</text>
+											</g>
+										))}
+									</svg>
+								</div>
+							) : (
+								<p class="text-sm text-gray-500">暂无年份统计</p>
+							)
+						}
+					</div>
+				</div>
+
+				<div class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5">
+					<div class="flex items-center justify-between gap-3">
+						<h3 class="text-sm font-semibold text-white">级别分布</h3>
+					</div>
+					<div class="mt-2">
+						{
+							levelPieSegments.length > 0 ? (
+								<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+									<div class="mx-auto w-full max-w-[180px] shrink-0">
+										<svg
+											viewBox="0 0 100 100"
+											class="mx-auto h-40 w-40"
+											aria-label="荣誉级别分布饼图"
+										>
+											<circle
+												cx="50"
+												cy="50"
+												r={pieRadius}
+												fill="none"
+												stroke="rgb(255 255 255 / 0.08)"
+												stroke-width="12"
+											/>
+											<g transform="rotate(-90 50 50)">
+												{levelPieSegments.map((item) => (
+													<circle
+														cx="50"
+														cy="50"
+														r={pieRadius}
+														fill="none"
+														stroke={item.color}
+														stroke-width="12"
+														stroke-linecap="butt"
+														stroke-dasharray={item.dashArray}
+														stroke-dashoffset={item.dashOffset}
+													/>
+												))}
+											</g>
+										</svg>
+									</div>
+									<div class="grid flex-1 gap-1.5">
+										{levelPieSegments.map((item) => (
+											<div class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-dark-950/40 px-3 py-1.5 text-[13px]">
+												<div class="flex items-center gap-2">
+													<span
+														class="h-2.5 w-2.5 rounded-full"
+														style={`background:${item.color}`}
+													/>
+													<span class="text-gray-200">{item.label}</span>
+												</div>
+												<span class="text-gray-400">
+													{item.count} / {Math.round(item.ratio * 100)}%
+												</span>
+											</div>
+										))}
+									</div>
+								</div>
+							) : (
+								<span class="text-sm text-gray-500">暂无级别标签</span>
+							)
+						}
+					</div>
+				</div>
+			</div>
+		</section>
 
 		<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5">
 			<div
@@ -142,12 +487,10 @@ const currentYear = new Date().getFullYear();
 				action="/admin/awards"
 				method="GET"
 				data-admin-awards-filter-form
-				class="mb-4 space-y-2.5"
+				class="mb-4"
 			>
-				<div
-					class="grid items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto]"
-				>
-					<div class="relative">
+				<div class="flex flex-wrap items-center gap-2.5">
+					<div class="relative min-w-[220px] flex-[1_1_280px] xl:max-w-[320px]">
 						<input
 							type="search"
 							name="q"
@@ -156,18 +499,8 @@ const currentYear = new Date().getFullYear();
 							class="min-h-[48px] w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-2.5 text-sm text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
 						/>
 					</div>
-					<button
-						type="submit"
-						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-600 sm:min-w-[112px]"
-					>
-						搜索
-					</button>
-				</div>
-				<div
-					class="grid items-center gap-2.5 md:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_auto]"
-				>
 					<div
-						class="relative"
+						class="relative min-w-[160px] flex-[1_1_180px] xl:max-w-[220px]"
 						data-custom-select-root
 						data-select-submit-on-change="true"
 					>
@@ -209,7 +542,7 @@ const currentYear = new Date().getFullYear();
 						</details>
 					</div>
 					<div
-						class="relative"
+						class="relative min-w-[160px] flex-[1_1_180px] xl:max-w-[220px]"
 						data-custom-select-root
 						data-select-submit-on-change="true"
 					>
@@ -253,7 +586,7 @@ const currentYear = new Date().getFullYear();
 						</details>
 					</div>
 					<div
-						class="relative"
+						class="relative min-w-[160px] flex-[1_1_180px] xl:max-w-[220px]"
 						data-custom-select-root
 						data-select-submit-on-change="true"
 					>
@@ -294,10 +627,16 @@ const currentYear = new Date().getFullYear();
 							</div>
 						</details>
 					</div>
+					<button
+						type="submit"
+						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-600 sm:min-w-[112px]"
+					>
+						搜索
+					</button>
 					<a
 						href="/admin/awards"
 						data-admin-awards-clear
-						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/10 px-4 py-2.5 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300 xl:min-w-[112px]"
+						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/10 px-4 py-2.5 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300 sm:min-w-[112px]"
 					>
 						清空
 					</a>

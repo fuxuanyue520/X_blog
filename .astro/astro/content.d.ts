@@ -150,70 +150,14 @@ declare module 'astro:content' {
 	>;
 
 	type ContentEntryMap = {
-		"posts": {
-"216_attendance.md": {
-	id: "216_attendance.md";
-  slug: "216_attendance";
-  body: string;
-  collection: "posts";
-  data: InferEntrySchema<"posts">
-} & { render(): Render[".md"] };
-"acm-graph-theory-mastery.md": {
-	id: "acm-graph-theory-mastery.md";
-  slug: "acm-graph-theory-mastery";
-  body: string;
-  collection: "posts";
-  data: InferEntrySchema<"posts">
-} & { render(): Render[".md"] };
-"blog.md": {
-	id: "blog.md";
-  slug: "blog";
-  body: string;
-  collection: "posts";
-  data: InferEntrySchema<"posts">
-} & { render(): Render[".md"] };
-"rainy-night-thoughts.md": {
-	id: "rainy-night-thoughts.md";
-  slug: "rainy-night-thoughts";
-  body: string;
-  collection: "posts";
-  data: InferEntrySchema<"posts">
-} & { render(): Render[".md"] };
-"share.md": {
-	id: "share.md";
-  slug: "share";
-  body: string;
-  collection: "posts";
-  data: InferEntrySchema<"posts">
-} & { render(): Render[".md"] };
-"travel-log-tibet.md": {
-	id: "travel-log-tibet.md";
-  slug: "travel-log-tibet";
-  body: string;
-  collection: "posts";
-  data: InferEntrySchema<"posts">
-} & { render(): Render[".md"] };
-"why-i-built-this-blog.md": {
-	id: "why-i-built-this-blog.md";
-  slug: "why-i-built-this-blog";
-  body: string;
-  collection: "posts";
-  data: InferEntrySchema<"posts">
-} & { render(): Render[".md"] };
-};
-
+		
 	};
 
 	type DataEntryMap = {
-		"config": Record<string, {
-  id: string;
-  collection: "config";
-  data: any;
-}>;
-
+		
 	};
 
 	type AnyEntryMap = ContentEntryMap & DataEntryMap;
 
-	export type ContentConfig = typeof import("./../../src/content/config.js");
+	export type ContentConfig = never;
 }

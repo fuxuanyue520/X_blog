@@ -1,46 +1,30 @@
 ---
-import PageLayout from '../../layouts/PageLayout.astro';
-import ArticleCard from '../../components/ArticleCard.astro';
-import { getCollection } from 'astro:content';
-import { Icon } from 'astro-icon/components';
+import PageLayout from "../../layouts/PageLayout.astro";
+import ArticleCard from "../../components/ArticleCard.astro";
+import { listPublishedArticles } from "@/lib/articles";
+import { Icon } from "astro-icon/components";
 
-export const prerender = true;
+export const prerender = false;
 
-export async function getStaticPaths() {
-  const allPosts = await getCollection('posts');
-  // Handle optional tags, filter out undefined/null, and flatten
-  const uniqueTags = [...new Set(allPosts.flatMap(post => post.data.tags || []))];
+const tag = Astro.params.tag ?? "";
+const allPosts = await listPublishedArticles();
+const posts = allPosts.filter((post) => post.data.tags?.includes(tag));
 
-  return uniqueTags.map(tag => {
-    const filteredPosts = allPosts
-      .filter(post => post.data.tags?.includes(tag))
-      .sort((a, b) => {
-        if (a.data.isPinned && !b.data.isPinned) return -1;
-        if (!a.data.isPinned && b.data.isPinned) return 1;
-        return new Date(b.data.publishedAt).valueOf() - new Date(a.data.publishedAt).valueOf();
-      });
-    
-    return {
-      params: { tag },
-      props: { posts: filteredPosts },
-    };
-  });
+if (!posts.length) {
+	Astro.response.status = 404;
 }
-
-const { tag } = Astro.params;
-const { posts } = Astro.props;
 ---
 
 <PageLayout title={`标签: ${tag} - 秋兰以为佩的博客`}>
-    <div class="mb-4 flex items-center justify-between">
-        <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Icon name="ri:price-tag-3-line" class="text-primary-500" />
-            标签: <span class="text-primary-500">{tag}</span>
-        </h2>
-    </div>
-    <div class="space-y-4">
-        {posts.map(post => (
-            <ArticleCard article={post} />
-        ))}
-    </div>
+	<div class="mb-4 flex items-center justify-between">
+		<h2
+			class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2"
+		>
+			<Icon name="ri:price-tag-3-line" class="text-primary-500" />
+			标签: <span class="text-primary-500">{tag}</span>
+		</h2>
+	</div>
+	<div class="space-y-4">
+		{posts.map((post) => <ArticleCard article={post} />)}
+	</div>
 </PageLayout>

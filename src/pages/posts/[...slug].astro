@@ -1,97 +1,102 @@
 ---
 import PageLayout from '../../layouts/PageLayout.astro';
-import { getCollection } from 'astro:content';
+import { getPublishedArticleBySlug, renderArticleMarkdown } from '@/lib/articles';
 import { formatDate } from '../../utils/date';
 import { getWordCount } from '../../utils/markdown';
 import { Icon } from 'astro-icon/components';
-import GithubCard from '../../components/GithubCard.astro';
 import TableOfContents from '../../components/TableOfContents.astro';
 
-export const prerender = true;
+export const prerender = false;
 
-export async function getStaticPaths() {
-  const posts = await getCollection('posts');
-  return posts.map(post => ({
-    params: { slug: post.slug },
-    props: { post },
-  }));
+const slug = Astro.params.slug ?? '';
+const post = await getPublishedArticleBySlug(slug);
+
+if (!post) {
+  Astro.response.status = 404;
 }
 
-const { post } = Astro.props;
-const { Content, headings } = await post.render();
-const { title, description, publishedAt, coverImage } = post.data;
-
-const wordCount = getWordCount(post.body);
+const title = post?.data.title ?? '文章不存在';
+const description = post?.data.description ?? '你访问的文章不存在或暂未发布。';
+const publishedAt = post?.data.publishedAt ?? new Date();
+const coverImage = post?.data.coverImage;
+const wordCount = getWordCount(post?.body ?? '');
+const rendered = post ? renderArticleMarkdown(post.body) : { html: '', headings: [] };
 ---
 
 <PageLayout title={title} description={description} showBanner={false}>
   
   <!-- Desktop TOC Sidebar -->
   <div slot="sidebar" class="hidden lg:block bg-white dark:bg-dark-800 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm dark:shadow-lg overflow-hidden">
-      <TableOfContents headings={headings} />
+      <TableOfContents headings={rendered.headings} />
   </div>
 
   <div class="max-w-6xl mx-auto">
-    <!-- Article Header -->
-    <div class="mb-4 text-center">
-        <h1 class="text-2xl md:text-3xl lg:text-5xl font-bold text-white mb-2 leading-tight">{title}</h1>
-        <div class="flex items-center justify-center gap-4 text-sm lg:text-base text-gray-400">
-            <span class="flex items-center gap-1">
-                <Icon name="ri:calendar-line" />
-                {formatDate(publishedAt)}
-            </span>
-            <span class="flex items-center gap-1">
-                <Icon name="ri:file-text-line" />
-                {wordCount} 字
-            </span>
-            <span class="flex items-center gap-1">
-                <Icon name="ri:user-smile-line" />
-                秋兰以为佩
-            </span>
-        </div>
-    </div>
-
-    {coverImage && (
-        <div class="w-full h-[180px] md:h-[260px] lg:h-[400px] rounded-xl overflow-hidden mb-6 shadow-2xl">
-            <img src={coverImage} alt={title} class="w-full h-full object-cover" />
-        </div>
-    )}
-
-    <!-- Mobile TOC (Visible only on small screens) -->
-    <div class="lg:hidden mb-4 bg-dark-800/30 p-3 rounded-xl border border-white/5">
-        <details class="group">
-            <summary class="flex items-center justify-between font-bold text-white cursor-pointer list-none text-sm">
-                <span>目录</span>
-                <span class="transition-transform group-open:rotate-180">
-                    <Icon name="ri:arrow-down-s-line" />
+    {post ? (
+      <>
+        <!-- Article Header -->
+        <div class="mb-4 text-center">
+            <h1 class="text-2xl md:text-3xl lg:text-5xl font-bold text-white mb-2 leading-tight">{title}</h1>
+            <div class="flex items-center justify-center gap-4 text-sm lg:text-base text-gray-400">
+                <span class="flex items-center gap-1">
+                    <Icon name="ri:calendar-line" />
+                    {formatDate(publishedAt)}
                 </span>
-            </summary>
-            <div class="mt-2">
-                <TableOfContents headings={headings} />
+                <span class="flex items-center gap-1">
+                    <Icon name="ri:file-text-line" />
+                    {wordCount} 字
+                </span>
+                <span class="flex items-center gap-1">
+                    <Icon name="ri:user-smile-line" />
+                    秋兰以为佩
+                </span>
             </div>
-        </details>
-    </div>
+        </div>
 
-    <!-- Content -->
-    <article class="prose prose-invert prose-lg lg:prose-xl max-w-none 
-        prose-headings:text-white prose-headings:font-serif prose-headings:font-bold prose-headings:scroll-mt-24
-        prose-p:text-gray-300 prose-p:leading-relaxed
-        prose-a:text-primary-400 prose-a:no-underline hover:prose-a:underline
-        prose-blockquote:border-l-primary-500 prose-blockquote:bg-dark-800 prose-blockquote:py-2 prose-blockquote:px-4 prose-blockquote:rounded-r-lg
-        prose-code:text-primary-300 prose-code:bg-dark-800 prose-code:px-1 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
-        prose-pre:bg-dark-800 prose-pre:border prose-pre:border-white/5 prose-pre:shadow-lg
-        prose-img:rounded-xl prose-img:shadow-lg
-        bg-dark-800/50 p-5 lg:p-8 rounded-2xl border border-white/5 backdrop-blur-sm
-    ">
-        <Content components={{ GithubCard }} />
-    </article>
+        {coverImage && (
+            <div class="w-full h-[180px] md:h-[260px] lg:h-[400px] rounded-xl overflow-hidden mb-6 shadow-2xl">
+                <img src={coverImage} alt={title} class="w-full h-full object-cover" />
+            </div>
+        )}
 
-    <!-- Post Footer -->
-    <div class="mt-8 pt-6 border-t border-white/10 flex justify-between items-center">
-        <button onclick="history.back()" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-transparent border-none cursor-pointer text-base">
-            <Icon name="ri:arrow-left-line" />
-            返回
-        </button>
-    </div>
+        <!-- Mobile TOC (Visible only on small screens) -->
+        <div class="lg:hidden mb-4 bg-dark-800/30 p-3 rounded-xl border border-white/5">
+            <details class="group">
+                <summary class="flex items-center justify-between font-bold text-white cursor-pointer list-none text-sm">
+                    <span>目录</span>
+                    <span class="transition-transform group-open:rotate-180">
+                        <Icon name="ri:arrow-down-s-line" />
+                    </span>
+                </summary>
+                <div class="mt-2">
+                    <TableOfContents headings={rendered.headings} />
+                </div>
+            </details>
+        </div>
+
+        <!-- Content -->
+        <article class="prose prose-invert prose-lg lg:prose-xl max-w-none 
+            prose-headings:text-white prose-headings:font-serif prose-headings:font-bold prose-headings:scroll-mt-24
+            prose-p:text-gray-300 prose-p:leading-relaxed
+            prose-a:text-primary-400 prose-a:no-underline hover:prose-a:underline
+            prose-blockquote:border-l-primary-500 prose-blockquote:bg-dark-800 prose-blockquote:py-2 prose-blockquote:px-4 prose-blockquote:rounded-r-lg
+            prose-code:text-primary-300 prose-code:bg-dark-800 prose-code:px-1 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+            prose-pre:bg-dark-800 prose-pre:border prose-pre:border-white/5 prose-pre:shadow-lg
+            prose-img:rounded-xl prose-img:shadow-lg
+            bg-dark-800/50 p-5 lg:p-8 rounded-2xl border border-white/5 backdrop-blur-sm
+        " set:html={rendered.html} />
+
+        <!-- Post Footer -->
+        <div class="mt-8 pt-6 border-t border-white/10 flex justify-between items-center">
+            <button onclick="history.back()" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-transparent border-none cursor-pointer text-base">
+                <Icon name="ri:arrow-left-line" />
+                返回
+            </button>
+        </div>
+      </>
+    ) : (
+      <div class="rounded-2xl border border-white/10 bg-dark-800/50 p-8 text-center text-gray-300">
+        文章不存在或暂未发布。
+      </div>
+    )}
   </div>
 </PageLayout>

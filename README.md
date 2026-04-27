@@ -210,33 +210,17 @@ LIBSQL_AUTH_TOKEN=your-token
 
 系统已包含旧数据兼容迁移逻辑，可在应用初始化时自动补齐部分字段并修正历史表结构。
 
-## 文章编写
+## 文章管理
 
-文章内容位于 `src/content/posts/` 目录，支持 Markdown 与 MDX。
+文章改为统一存储在数据库 `blog_articles` 表中，不再依赖 `src/content/posts/`。
 
-示例 Frontmatter：
+推荐通过后台 `/admin/documents` 管理文章，支持：
 
-```markdown
----
-title: "文章标题"
-description: "文章摘要"
-publishedAt: "2024-01-01"
-updatedAt: "2024-01-02"
-category: "tech"
-tags: ["Astro", "Blog"]
-coverImage: "/images/cover.jpg"
-isPinned: false
-draft: false
----
+- 新建、编辑、删除文章
+- 设置标题、摘要、分类、标签、发布时间、封面、置顶、草稿
+- 导入 `.md` / `.markdown` 文件自动解析元信息和正文
 
-正文内容
-```
-
-说明：
-
-- `updatedAt` 为可选字段
-- `draft: true` 表示文章在生产环境中不公开展示
-- 图片建议放置在 `public/images/` 目录中引用
+首次切换到数据库模式时，如果数据库文章表为空，系统会自动尝试将旧的 `src/content/posts/` Markdown 文章迁移入库。
 
 ## 自定义与二次开发
 
@@ -246,7 +230,7 @@ draft: false
 - `src/components/widgets/`：侧边栏组件
 - `src/pages/`：页面路由
 - `src/styles/global.css`：全局样式
-- `src/content/posts/`：文章内容
+- `src/lib/articles.ts`：文章数据库读写与 Markdown 渲染
 
 ## 说明
 

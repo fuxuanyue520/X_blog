@@ -1,50 +1,67 @@
 ---
-import PageLayout from '../layouts/PageLayout.astro';
-import ArticleCard from '../components/ArticleCard.astro';
-import Pagination from '../components/Pagination.astro';
-import { getAllArticles } from '../utils/markdown';
-import { Icon } from 'astro-icon/components';
-import type { GetStaticPaths, Page } from 'astro';
-import type { CollectionEntry } from 'astro:content';
+import PageLayout from "../layouts/PageLayout.astro";
+import ArticleCard from "../components/ArticleCard.astro";
+import Pagination from "../components/Pagination.astro";
+import { paginatePublishedArticles } from "@/lib/articles";
+import { Icon } from "astro-icon/components";
 
-export const prerender = true;
+export const prerender = false;
 
-export const getStaticPaths = (async ({ paginate }) => {
-  const posts = await getAllArticles();
-  return paginate(posts, { pageSize: 5 });
-}) satisfies GetStaticPaths;
+const rawPage = Astro.params.page;
+const requestedPage = rawPage ? Number(rawPage) : 1;
+const page = await paginatePublishedArticles(requestedPage, 5);
 
-interface Props {
-  page: Page<CollectionEntry<'posts'>>;
+if (rawPage && (!Number.isInteger(requestedPage) || requestedPage < 1)) {
+	Astro.response.status = 404;
 }
 
-const { page } = Astro.props;
+if (rawPage && requestedPage > page.lastPage) {
+	Astro.response.status = 404;
+}
+
+const prevUrl =
+	page.currentPage > 1
+		? page.currentPage === 2
+			? "/"
+			: `/${page.currentPage - 1}`
+		: undefined;
+const nextUrl =
+	page.currentPage < page.lastPage ? `/${page.currentPage + 1}` : undefined;
 ---
 
 <PageLayout title="秋兰以为佩的博客">
-    <div class="mb-4 flex items-center justify-between">
-        <h2 class="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <span class="w-1 h-5 bg-primary-500 rounded-full"></span>
-            最新文章
-        </h2>
-        <span class="text-sm lg:text-base text-gray-500 dark:text-gray-400 hidden md:block">
-            共 {page.total} 篇文章
-        </span>
-    </div>
+	<div class="mb-4 flex items-center justify-between">
+		<h2
+			class="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2"
+		>
+			<span class="w-1 h-5 bg-primary-500 rounded-full"></span>
+			最新文章
+		</h2>
+		<span
+			class="text-sm lg:text-base text-gray-500 dark:text-gray-400 hidden md:block"
+		>
+			共 {page.total} 篇文章
+		</span>
+	</div>
 
-    <div class="space-y-4">
-        {page.data.map((post: any, index: number) => (
-            <div class="animate-fade-in-up" style={`animation-delay: ${index * 150}ms`}>
-                <ArticleCard article={post} />
-            </div>
-        ))}
-    </div>
-    
-    <!-- New Pagination Component -->
-    <Pagination 
-        currentPage={page.currentPage} 
-        lastPage={page.lastPage} 
-        prevUrl={page.url.prev} 
-        nextUrl={page.url.next} 
-    />
+	<div class="space-y-4">
+		{
+			page.items.map((post, index) => (
+				<div
+					class="animate-fade-in-up"
+					style={`animation-delay: ${index * 150}ms`}
+				>
+					<ArticleCard article={post} />
+				</div>
+			))
+		}
+	</div>
+
+	<!-- New Pagination Component -->
+	<Pagination
+		currentPage={page.currentPage}
+		lastPage={page.lastPage}
+		prevUrl={prevUrl}
+		nextUrl={nextUrl}
+	/>
 </PageLayout>

@@ -1,10 +1,12 @@
 import { createClient, type Client } from "@libsql/client";
-import { existsSync, mkdirSync, renameSync } from "node:fs";
+import matter from "gray-matter";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync } from "node:fs";
 import path from "node:path";
 import { hashPassword } from "@/lib/security";
 
 let dbClient: Client | undefined;
 let dbPromise: Promise<Client> | undefined;
+const LEGACY_POSTS_DIRECTORY = path.join(process.cwd(), "src", "content", "posts");
 
 function getDatabaseUrl() {
 	if (import.meta.env.LIBSQL_URL) {
@@ -69,6 +71,165 @@ function splitLegacyAwardTitle(title: string) {
 		competitionName: normalizedTitle,
 		awardName: "",
 	};
+}
+
+function padDatePart(value: number) {
+	return String(value).padStart(2, "0");
+}
+
+function toLocalDateTimeString(date: Date) {
+	return [
+		date.getFullYear(),
+		padDatePart(date.getMonth() + 1),
+		padDatePart(date.getDate()),
+	].join("-") +
+		`T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
+}
+
+function parseDateTimeValue(value: string) {
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return null;
+	}
+
+	const normalized = trimmed.replace(/\.\d{1,3}Z?$/, "").replace(" ", "T");
+	const candidates = new Set<string>();
+
+	if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)) {
+		candidates.add(`${normalized}:00`);
+	} else if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+		candidates.add(`${normalized}T00:00:00`);
+	} else {
+		candidates.add(normalized);
+	}
+
+	candidates.add(trimmed.replace(/\s*\([^)]*\)\s*$/, ""));
+
+	for (const candidate of candidates) {
+		const parsed = new Date(candidate);
+		if (!Number.isNaN(parsed.getTime())) {
+			return parsed;
+		}
+	}
+
+	return null;
+}
+
+function normalizeLegacyDateTimeValue(value: unknown) {
+	const raw = String(value ?? "").trim();
+	if (!raw) {
+		return "";
+	}
+
+	const parsed = parseDateTimeValue(raw);
+	return parsed ? toLocalDateTimeString(parsed) : "";
+}
+
+function normalizeLegacyTags(value: unknown) {
+	if (Array.isArray(value)) {
+		return value
+			.map((item) => String(item ?? "").trim())
+			.filter(Boolean);
+	}
+
+	return String(value ?? "")
+		.split(/[,，\n]/)
+		.map((item) => item.trim())
+		.filter(Boolean);
+}
+
+function normalizeLegacySlugCandidate(value: string) {
+	return value
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9\s-]/g, " ")
+		.replace(/\s+/g, "-")
+		.replace(/-+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+function normalizeLegacyArticleSlug(value: string, fallbackSource = "") {
+	const normalized =
+		normalizeLegacySlugCandidate(value) || normalizeLegacySlugCandidate(fallbackSource);
+	return normalized || `post-${Date.now()}`;
+}
+
+function toLegacyBoolean(value: unknown) {
+	if (typeof value === "boolean") {
+		return value;
+	}
+
+	return String(value ?? "").trim().toLowerCase() === "true";
+}
+
+async function migrateLegacyMarkdownArticles(db: Client) {
+	if (!existsSync(LEGACY_POSTS_DIRECTORY)) {
+		return;
+	}
+
+	const entries = readdirSync(LEGACY_POSTS_DIRECTORY, { withFileTypes: true })
+		.filter((entry) => entry.isFile() && /\.(md|markdown)$/i.test(entry.name))
+		.sort((left, right) => left.name.localeCompare(right.name));
+
+	for (const entry of entries) {
+		const filePath = path.join(LEGACY_POSTS_DIRECTORY, entry.name);
+		const raw = readFileSync(filePath, "utf8");
+		const parsed = matter(raw);
+		const data = parsed.data as Record<string, unknown>;
+		const fallbackSlug = entry.name.replace(/\.(md|markdown)$/i, "");
+		const title = String(data.title ?? "").trim() || fallbackSlug || "未命名文章";
+		const slug = normalizeLegacyArticleSlug(String(data.slug ?? fallbackSlug), title);
+		const category = ["tech", "essay", "project", "other"].includes(
+			String(data.category ?? "").trim(),
+		)
+			? String(data.category).trim()
+			: "other";
+		const publishedAt =
+			normalizeLegacyDateTimeValue(data.publishedAt) ||
+			new Date().toISOString().slice(0, 19);
+		const articleUpdatedAt = normalizeLegacyDateTimeValue(data.updatedAt) || null;
+		const tags = JSON.stringify(normalizeLegacyTags(data.tags));
+		const coverImage = String(data.coverImage ?? "").trim() || null;
+		const body = parsed.content.replace(/^\uFEFF/, "").trim();
+		const now = new Date().toISOString();
+
+		await db.execute({
+			sql: `
+				INSERT OR IGNORE INTO blog_articles (
+					slug,
+					title,
+					description,
+					category,
+					tags,
+					published_at,
+					article_updated_at,
+					cover_image,
+					is_pinned,
+					draft,
+					body,
+					created_at,
+					updated_at
+				)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`,
+			args: [
+				slug,
+				title,
+				String(data.description ?? "").trim(),
+				category,
+				tags,
+				publishedAt,
+				articleUpdatedAt,
+				coverImage,
+				toLegacyBoolean(data.isPinned) ? 1 : 0,
+				toLegacyBoolean(data.draft) ? 1 : 0,
+				body,
+				now,
+				now,
+			],
+		});
+	}
 }
 
 async function migrateAwardCertificateSchema(db: Client) {
@@ -216,7 +377,26 @@ async function initializeDatabase() {
 			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 	`);
+	await db.execute(`
+		CREATE TABLE IF NOT EXISTS blog_articles (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			slug TEXT NOT NULL UNIQUE,
+			title TEXT NOT NULL,
+			description TEXT NOT NULL,
+			category TEXT NOT NULL,
+			tags TEXT NOT NULL DEFAULT '[]',
+			published_at TEXT NOT NULL,
+			article_updated_at TEXT,
+			cover_image TEXT,
+			is_pinned INTEGER NOT NULL DEFAULT 0,
+			draft INTEGER NOT NULL DEFAULT 0,
+			body TEXT NOT NULL,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`);
 	await migrateAwardCertificateSchema(db);
+	await migrateLegacyMarkdownArticles(db);
 	await db.execute({
 		sql: "DELETE FROM admin_sessions WHERE expires_at <= ?",
 		args: [new Date().toISOString()],

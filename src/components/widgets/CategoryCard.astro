@@ -1,8 +1,8 @@
 ---
 import { Icon } from 'astro-icon/components';
-import { getCollection } from 'astro:content';
+import { listPublishedArticles } from '@/lib/articles';
 
-const allPosts = await getCollection('posts');
+const allPosts = await listPublishedArticles();
 
 // Calculate real category counts
 const categoryCount = allPosts.reduce((acc, post) => {

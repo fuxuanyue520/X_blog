@@ -1,68 +1,94 @@
 ---
-import PageLayout from '../layouts/PageLayout.astro';
-import { getAllArticles } from '../utils/markdown';
-import { formatDate } from '../utils/date';
-import { Icon } from 'astro-icon/components';
+import PageLayout from "../layouts/PageLayout.astro";
+import { listPublishedArticles } from "@/lib/articles";
+import { formatDate } from "../utils/date";
+import { Icon } from "astro-icon/components";
 
-export const prerender = true;
+export const prerender = false;
 
-const posts = await getAllArticles({ ignorePinned: true });
+const posts = (await listPublishedArticles()).sort(
+	(a, b) =>
+		new Date(b.data.publishedAt).getTime() -
+		new Date(a.data.publishedAt).getTime(),
+);
 
 // Group by year
-const postsByYear = posts.reduce((acc, post) => {
-  const year = new Date(post.data.publishedAt).getFullYear();
-  if (!acc[year]) acc[year] = [];
-  acc[year].push(post);
-  return acc;
-}, {} as Record<number, typeof posts>);
+const postsByYear = posts.reduce(
+	(acc, post) => {
+		const year = new Date(post.data.publishedAt).getFullYear();
+		if (!acc[year]) acc[year] = [];
+		acc[year].push(post);
+		return acc;
+	},
+	{} as Record<number, typeof posts>,
+);
 
-const years = Object.keys(postsByYear).map(Number).sort((a, b) => b - a);
+const years = Object.keys(postsByYear)
+	.map(Number)
+	.sort((a, b) => b - a);
 
 const categoryMap: Record<string, string> = {
-    'tech': '技术',
-    'essay': '随笔',
-    'project': '项目',
-    'other': '其他'
+	tech: "技术",
+	essay: "随笔",
+	project: "项目",
+	other: "其他",
 };
 
 const categoryIconMap: Record<string, string> = {
-    'tech': 'ri:code-box-line',
-    'essay': 'ri:quill-pen-line',
-    'project': 'ri:stack-line',
-    'other': 'ri:more-fill'
+	tech: "ri:code-box-line",
+	essay: "ri:quill-pen-line",
+	project: "ri:stack-line",
+	other: "ri:more-fill",
 };
 ---
 
 <PageLayout title="归档">
-    <div class="bg-white dark:bg-dark-800 rounded-xl p-4 shadow-sm dark:shadow-lg border border-gray-100 dark:border-white/5">
-        <h1 class="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-            <Icon name="ri:archive-line" class="text-primary-500" />
-            文章归档
-        </h1>
-        
-        <div class="space-y-6 relative before:absolute before:left-2 before:top-2 before:bottom-0 before:w-0.5 before:bg-gray-200 dark:before:bg-dark-700">
-            {years.map(year => (
-                <div class="relative pl-8">
-                    <div class="absolute left-0 top-0 w-4 h-4 rounded-full bg-gray-50 dark:bg-dark-900 border-2 border-primary-500"></div>
-                    <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-3">{year}</h2>
-                    <div class="space-y-3">
-                        {postsByYear[year].map(post => (
-                            <a href={`/posts/${post.slug}`} class="block group">
-                                <div class="flex items-center justify-between text-gray-500 dark:text-gray-400 group-hover:text-primary-500 dark:group-hover:text-primary-400 transition-colors">
-                                    <span class="text-xs">{formatDate(post.data.publishedAt)}</span>
-                                    <span class="text-xs border border-gray-200 dark:border-dark-600 px-2 py-0.5 rounded text-gray-500 dark:text-dark-400 group-hover:border-primary-500/30 group-hover:text-primary-500 dark:group-hover:text-primary-400 transition-colors flex items-center gap-1">
-                                        <Icon name={categoryIconMap[post.data.category] || 'ri:folder-line'} />
-                                        {categoryMap[post.data.category]}
-                                    </span>
-                                </div>
-                                <h3 class="text-base font-serif font-medium text-gray-800 dark:text-gray-200 mt-1 group-hover:text-primary-500 dark:group-hover:text-primary-400 transition-colors">
-                                    {post.data.title}
-                                </h3>
-                            </a>
-                        ))}
-                    </div>
-                </div>
-            ))}
-        </div>
-    </div>
+	<div
+		class="bg-white dark:bg-dark-800 rounded-xl p-4 shadow-sm dark:shadow-lg border border-gray-100 dark:border-white/5"
+	>
+		<h1
+			class="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2"
+		>
+			<Icon name="ri:archive-line" class="text-primary-500" />
+			文章归档
+		</h1>
+
+		<div
+			class="space-y-6 relative before:absolute before:left-2 before:top-2 before:bottom-0 before:w-0.5 before:bg-gray-200 dark:before:bg-dark-700"
+		>
+			{
+				years.map((year) => (
+					<div class="relative pl-8">
+						<div class="absolute left-0 top-0 w-4 h-4 rounded-full bg-gray-50 dark:bg-dark-900 border-2 border-primary-500" />
+						<h2 class="text-xl font-bold text-gray-900 dark:text-white mb-3">
+							{year}
+						</h2>
+						<div class="space-y-3">
+							{postsByYear[year].map((post) => (
+								<a href={`/posts/${post.slug}`} class="block group">
+									<div class="flex items-center justify-between text-gray-500 dark:text-gray-400 group-hover:text-primary-500 dark:group-hover:text-primary-400 transition-colors">
+										<span class="text-xs">
+											{formatDate(post.data.publishedAt)}
+										</span>
+										<span class="text-xs border border-gray-200 dark:border-dark-600 px-2 py-0.5 rounded text-gray-500 dark:text-dark-400 group-hover:border-primary-500/30 group-hover:text-primary-500 dark:group-hover:text-primary-400 transition-colors flex items-center gap-1">
+											<Icon
+												name={
+													categoryIconMap[post.data.category] ||
+													"ri:folder-line"
+												}
+											/>
+											{categoryMap[post.data.category]}
+										</span>
+									</div>
+									<h3 class="text-base font-serif font-medium text-gray-800 dark:text-gray-200 mt-1 group-hover:text-primary-500 dark:group-hover:text-primary-400 transition-colors">
+										{post.data.title}
+									</h3>
+								</a>
+							))}
+						</div>
+					</div>
+				))
+			}
+		</div>
+	</div>
 </PageLayout>
