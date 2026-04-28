@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import {
 	createSessionToken,
 	hashSessionToken,
+	normalizeStoredCredential,
 	verifyPassword,
 } from "@/lib/security";
 
@@ -39,8 +40,8 @@ export async function authenticateAdmin(username: string, password: string) {
 		return null;
 	}
 
-	const passwordHash = String(row.password_hash ?? "");
-	const passwordSalt = String(row.password_salt ?? "");
+	const passwordHash = normalizeStoredCredential(row.password_hash);
+	const passwordSalt = normalizeStoredCredential(row.password_salt);
 	const isValid = verifyPassword(password, passwordHash, passwordSalt);
 
 	if (!isValid) {
@@ -58,13 +59,14 @@ export async function createAdminSession(userId: number) {
 	const token = createSessionToken();
 	const tokenHash = hashSessionToken(token);
 	const expiresAt = new Date(Date.now() + SESSION_DURATION_MS).toISOString();
+	const createdAt = new Date().toISOString();
 
 	await db.execute({
 		sql: `
-			INSERT INTO admin_sessions (user_id, token_hash, expires_at)
-			VALUES (?, ?, ?)
+			INSERT INTO admin_sessions (user_id, token_hash, expires_at, created_at)
+			VALUES (?, ?, ?, ?)
 		`,
-		args: [userId, tokenHash, expiresAt],
+		args: [userId, tokenHash, expiresAt, createdAt],
 	});
 
 	return { token, expiresAt };

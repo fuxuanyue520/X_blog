@@ -1,435 +1,174 @@
-import { createClient, type Client } from "@libsql/client";
-import matter from "gray-matter";
-import {
-	existsSync,
-	mkdirSync,
-	readFileSync,
-	readdirSync,
-	renameSync,
-} from "node:fs";
-import path from "node:path";
+import mysql, {
+	type Pool,
+	type ResultSetHeader,
+	type RowDataPacket,
+} from "mysql2/promise";
 import { hashPassword } from "@/lib/security";
 
-let dbClient: Client | undefined;
-let dbPromise: Promise<Client> | undefined;
-const LEGACY_POSTS_DIRECTORY = path.join(
-	process.cwd(),
-	"src",
-	"content",
-	"posts",
-);
+type DbExecuteInput = string | { sql: string; args?: unknown[] };
 
-function getLibsqlUrl() {
-	return process.env.LIBSQL_URL || import.meta.env.LIBSQL_URL;
+export interface DbExecuteResult {
+	rows: Array<Record<string, unknown>>;
+	lastInsertRowid?: number;
 }
 
-function getLibsqlAuthToken() {
-	return process.env.LIBSQL_AUTH_TOKEN || import.meta.env.LIBSQL_AUTH_TOKEN;
+export interface AppDbClient {
+	execute(input: DbExecuteInput): Promise<DbExecuteResult>;
 }
 
-function getDatabaseUrl() {
-	const remoteUrl = getLibsqlUrl();
-	if (remoteUrl) {
-		return remoteUrl;
+class MysqlDbClient implements AppDbClient {
+	constructor(private readonly pool: Pool) {}
+
+	async execute(input: DbExecuteInput): Promise<DbExecuteResult> {
+		const { sql, args } =
+			typeof input === "string" ? { sql: input, args: [] } : input;
+		const [result] = await this.pool.execute(sql, args ?? []);
+
+		if (Array.isArray(result)) {
+			return {
+				rows: (result as RowDataPacket[]).map((row) => ({ ...row })),
+			};
+		}
+
+		const insertResult = result as ResultSetHeader;
+		return {
+			rows: [],
+			lastInsertRowid:
+				typeof insertResult.insertId === "number"
+					? insertResult.insertId
+					: undefined,
+		};
 	}
+}
 
-	const dataDir = path.join(process.cwd(), "data");
-	mkdirSync(dataDir, { recursive: true });
+let dbClient: AppDbClient | undefined;
+let dbPromise: Promise<AppDbClient> | undefined;
+let poolClient: Pool | undefined;
 
-	const legacyDatabasePath = path.join(dataDir, "admin.db");
-	const databasePath = path.join(dataDir, "x_blog.db");
+function getMysqlConfig() {
+	const host =
+		process.env.MYSQL_HOST || import.meta.env.MYSQL_HOST || "127.0.0.1";
+	const port = Number(
+		process.env.MYSQL_PORT || import.meta.env.MYSQL_PORT || "3306",
+	);
+	const user = process.env.MYSQL_USER || import.meta.env.MYSQL_USER || "root";
+	const password =
+		process.env.MYSQL_PASSWORD || import.meta.env.MYSQL_PASSWORD || "123456";
+	const database =
+		process.env.MYSQL_DATABASE || import.meta.env.MYSQL_DATABASE || "blog";
 
-	if (!existsSync(databasePath) && existsSync(legacyDatabasePath)) {
-		renameSync(legacyDatabasePath, databasePath);
-	}
-
-	return `file:${databasePath}`;
+	return {
+		host,
+		port: Number.isFinite(port) ? port : 3306,
+		user,
+		password,
+		database,
+	};
 }
 
 function createDatabaseClient() {
 	if (!dbClient) {
-		dbClient = createClient({
-			url: getDatabaseUrl(),
-			authToken: getLibsqlAuthToken(),
+		const config = getMysqlConfig();
+		poolClient = mysql.createPool({
+			host: config.host,
+			port: config.port,
+			user: config.user,
+			password: config.password,
+			database: config.database,
+			waitForConnections: true,
+			connectionLimit: 10,
+			queueLimit: 0,
+			charset: "utf8mb4",
+			dateStrings: true,
 		});
+		dbClient = new MysqlDbClient(poolClient);
 	}
 
 	return dbClient;
 }
 
-function splitLegacyAwardTitle(title: string) {
-	const normalizedTitle = title.trim().replace(/\s+/g, " ");
-
-	if (!normalizedTitle) {
-		return {
-			competitionName: "",
-			awardName: "",
-		};
-	}
-
-	const awardPatterns = [
-		/(特等奖学金|一等奖学金|二等奖学金|三等奖学金|优秀毕业生)$/u,
-		/(特等奖|一等奖|二等奖|三等奖|金奖|银奖|铜奖|优秀奖|优胜奖|入围奖)$/u,
-		/(冠军|亚军|季军)$/u,
-		/(第[一二三四五六七八九十百零]+名|第\d+名)$/u,
-		/(团体特等奖|团体一等奖|团体二等奖|团体三等奖)$/u,
-	];
-
-	for (const pattern of awardPatterns) {
-		const match = normalizedTitle.match(pattern);
-		if (!match || typeof match.index !== "number" || match.index <= 0) {
-			continue;
-		}
-
-		return {
-			competitionName: normalizedTitle.slice(0, match.index).trim(),
-			awardName: match[0].trim(),
-		};
-	}
-
-	return {
-		competitionName: normalizedTitle,
-		awardName: "",
-	};
-}
-
-function padDatePart(value: number) {
-	return String(value).padStart(2, "0");
-}
-
-function toLocalDateTimeString(date: Date) {
-	return (
-		[
-			date.getFullYear(),
-			padDatePart(date.getMonth() + 1),
-			padDatePart(date.getDate()),
-		].join("-") +
-		`T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`
-	);
-}
-
-function parseDateTimeValue(value: string) {
-	const trimmed = value.trim();
-	if (!trimmed) {
-		return null;
-	}
-
-	const normalized = trimmed.replace(/\.\d{1,3}Z?$/, "").replace(" ", "T");
-	const candidates = new Set<string>();
-
-	if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)) {
-		candidates.add(`${normalized}:00`);
-	} else if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-		candidates.add(`${normalized}T00:00:00`);
-	} else {
-		candidates.add(normalized);
-	}
-
-	candidates.add(trimmed.replace(/\s*\([^)]*\)\s*$/, ""));
-
-	for (const candidate of candidates) {
-		const parsed = new Date(candidate);
-		if (!Number.isNaN(parsed.getTime())) {
-			return parsed;
-		}
-	}
-
-	return null;
-}
-
-function normalizeLegacyDateTimeValue(value: unknown) {
-	const raw = String(value ?? "").trim();
-	if (!raw) {
-		return "";
-	}
-
-	const parsed = parseDateTimeValue(raw);
-	return parsed ? toLocalDateTimeString(parsed) : "";
-}
-
-function normalizeLegacyTags(value: unknown) {
-	if (Array.isArray(value)) {
-		return value.map((item) => String(item ?? "").trim()).filter(Boolean);
-	}
-
-	return String(value ?? "")
-		.split(/[,，\n]/)
-		.map((item) => item.trim())
-		.filter(Boolean);
-}
-
-function normalizeLegacySlugCandidate(value: string) {
-	return value
-		.normalize("NFKD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.toLowerCase()
-		.replace(/[^a-z0-9\s-]/g, " ")
-		.replace(/\s+/g, "-")
-		.replace(/-+/g, "-")
-		.replace(/^-|-$/g, "");
-}
-
-function normalizeLegacyArticleSlug(value: string, fallbackSource = "") {
-	const normalized =
-		normalizeLegacySlugCandidate(value) ||
-		normalizeLegacySlugCandidate(fallbackSource);
-	return normalized || `post-${Date.now()}`;
-}
-
-function toLegacyBoolean(value: unknown) {
-	if (typeof value === "boolean") {
-		return value;
-	}
-
-	return (
-		String(value ?? "")
-			.trim()
-			.toLowerCase() === "true"
-	);
-}
-
-async function migrateLegacyMarkdownArticles(db: Client) {
-	if (!existsSync(LEGACY_POSTS_DIRECTORY)) {
-		return;
-	}
-
-	const entries = readdirSync(LEGACY_POSTS_DIRECTORY, { withFileTypes: true })
-		.filter((entry) => entry.isFile() && /\.(md|markdown)$/i.test(entry.name))
-		.sort((left, right) => left.name.localeCompare(right.name));
-
-	for (const entry of entries) {
-		const filePath = path.join(LEGACY_POSTS_DIRECTORY, entry.name);
-		const raw = readFileSync(filePath, "utf8");
-		const parsed = matter(raw);
-		const data = parsed.data as Record<string, unknown>;
-		const fallbackSlug = entry.name.replace(/\.(md|markdown)$/i, "");
-		const title =
-			String(data.title ?? "").trim() || fallbackSlug || "未命名文章";
-		const slug = normalizeLegacyArticleSlug(
-			String(data.slug ?? fallbackSlug),
-			title,
-		);
-		const category = ["tech", "essay", "project", "other"].includes(
-			String(data.category ?? "").trim(),
+const TABLE_SCHEMAS: Record<string, string> = {
+	admin_users: `
+		CREATE TABLE IF NOT EXISTS admin_users (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			username VARCHAR(128) NOT NULL UNIQUE,
+			password_hash VARCHAR(512) NOT NULL,
+			password_salt VARCHAR(512) NOT NULL,
+			created_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+			updated_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 		)
-			? String(data.category).trim()
-			: "other";
-		const publishedAt =
-			normalizeLegacyDateTimeValue(data.publishedAt) ||
-			new Date().toISOString().slice(0, 19);
-		const articleUpdatedAt =
-			normalizeLegacyDateTimeValue(data.updatedAt) || null;
-		const tags = JSON.stringify(normalizeLegacyTags(data.tags));
-		const coverImage = String(data.coverImage ?? "").trim() || null;
-		const body = parsed.content.replace(/^\uFEFF/, "").trim();
-		const now = new Date().toISOString();
+	`,
+	admin_sessions: `
+		CREATE TABLE IF NOT EXISTS admin_sessions (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			user_id BIGINT NOT NULL,
+			token_hash VARCHAR(256) NOT NULL UNIQUE,
+			expires_at VARCHAR(40) NOT NULL,
+			created_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+			FOREIGN KEY(user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+		)
+	`,
+	award_certificates: `
+		CREATE TABLE IF NOT EXISTS award_certificates (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			title VARCHAR(255) NOT NULL,
+			honor_type VARCHAR(32) NOT NULL DEFAULT '奖项',
+			competition_name VARCHAR(255) NOT NULL DEFAULT '',
+			award_name VARCHAR(255) NOT NULL DEFAULT '',
+			award_year INT NOT NULL,
+			award_level VARCHAR(64) NOT NULL,
+			description TEXT,
+			image_name VARCHAR(255) NOT NULL,
+			image_mime_type VARCHAR(128) NOT NULL,
+			image_base64 LONGTEXT NOT NULL,
+			created_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+			updated_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+		)
+	`,
+	blog_articles: `
+		CREATE TABLE IF NOT EXISTS blog_articles (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			slug VARCHAR(255) NOT NULL UNIQUE,
+			title VARCHAR(255) NOT NULL,
+			description TEXT NOT NULL,
+			category VARCHAR(32) NOT NULL,
+			tags TEXT NOT NULL,
+			published_at VARCHAR(40) NOT NULL,
+			article_updated_at VARCHAR(40),
+			cover_image VARCHAR(512),
+			is_pinned TINYINT(1) NOT NULL DEFAULT 0,
+			draft TINYINT(1) NOT NULL DEFAULT 0,
+			body LONGTEXT NOT NULL,
+			created_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+			updated_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+		)
+	`,
+};
 
-		await db.execute({
-			sql: `
-				INSERT OR IGNORE INTO blog_articles (
-					slug,
-					title,
-					description,
-					category,
-					tags,
-					published_at,
-					article_updated_at,
-					cover_image,
-					is_pinned,
-					draft,
-					body,
-					created_at,
-					updated_at
-				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			`,
-			args: [
-				slug,
-				title,
-				String(data.description ?? "").trim(),
-				category,
-				tags,
-				publishedAt,
-				articleUpdatedAt,
-				coverImage,
-				toLegacyBoolean(data.isPinned) ? 1 : 0,
-				toLegacyBoolean(data.draft) ? 1 : 0,
-				body,
-				now,
-				now,
-			],
-		});
-	}
-}
+async function ensureMissingTables(db: AppDbClient) {
+	const existingTablesResult = await db.execute({
+		sql: `
+			SELECT table_name
+			FROM information_schema.tables
+			WHERE table_schema = DATABASE()
+		`,
+	});
+	const existingTables = new Set(
+		existingTablesResult.rows.map((row) =>
+			String(row.table_name ?? row.TABLE_NAME ?? "").toLowerCase(),
+		),
+	);
 
-async function migrateAwardCertificateSchema(db: Client) {
-	const tableInfo = await db.execute("PRAGMA table_info('award_certificates')");
-	const columns = new Set(tableInfo.rows.map((row) => String(row.name ?? "")));
-
-	if (!columns.has("honor_type")) {
-		await db.execute(
-			"ALTER TABLE award_certificates ADD COLUMN honor_type TEXT NOT NULL DEFAULT '奖项'",
-		);
-	}
-
-	if (!columns.has("competition_name")) {
-		await db.execute(
-			"ALTER TABLE award_certificates ADD COLUMN competition_name TEXT NOT NULL DEFAULT ''",
-		);
-	}
-
-	if (!columns.has("award_name")) {
-		await db.execute(
-			"ALTER TABLE award_certificates ADD COLUMN award_name TEXT NOT NULL DEFAULT ''",
-		);
-	}
-
-	const records = await db.execute(`
-		SELECT id, title, honor_type, competition_name, award_name
-		FROM award_certificates
-		WHERE
-			COALESCE(honor_type, '') = ''
-			OR COALESCE(competition_name, '') = ''
-			OR COALESCE(award_name, '') = ''
-	`);
-
-	for (const row of records.rows) {
-		const title = String(row.title ?? "");
-		const honorType = String(row.honor_type ?? "").trim() || "奖项";
-		const fallback = splitLegacyAwardTitle(title);
-		const competitionName =
-			String(row.competition_name ?? "").trim() || fallback.competitionName;
-		const awardName = String(row.award_name ?? "").trim() || fallback.awardName;
-
-		await db.execute({
-			sql: `
-				UPDATE award_certificates
-				SET honor_type = ?, competition_name = ?, award_name = ?
-				WHERE id = ?
-			`,
-			args: [honorType, competitionName, awardName, Number(row.id)],
-		});
-	}
-
-	if (columns.has("school")) {
-		await db.execute("DROP TABLE IF EXISTS award_certificates__new");
-		await db.execute(`
-			CREATE TABLE award_certificates__new (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				title TEXT NOT NULL,
-				honor_type TEXT NOT NULL DEFAULT '奖项',
-				competition_name TEXT NOT NULL DEFAULT '',
-				award_name TEXT NOT NULL DEFAULT '',
-				award_year INTEGER NOT NULL,
-				award_level TEXT NOT NULL,
-				description TEXT,
-				image_name TEXT NOT NULL,
-				image_mime_type TEXT NOT NULL,
-				image_base64 TEXT NOT NULL,
-				created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-				updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-			)
-		`);
-		await db.execute(`
-			INSERT INTO award_certificates__new (
-				id,
-				title,
-				honor_type,
-				competition_name,
-				award_name,
-				award_year,
-				award_level,
-				description,
-				image_name,
-				image_mime_type,
-				image_base64,
-				created_at,
-				updated_at
-			)
-			SELECT
-				id,
-				title,
-				honor_type,
-				competition_name,
-				award_name,
-				award_year,
-				award_level,
-				description,
-				image_name,
-				image_mime_type,
-				image_base64,
-				created_at,
-				updated_at
-			FROM award_certificates
-		`);
-		await db.execute("DROP TABLE award_certificates");
-		await db.execute(
-			"ALTER TABLE award_certificates__new RENAME TO award_certificates",
-		);
+	for (const [tableName, createSql] of Object.entries(TABLE_SCHEMAS)) {
+		if (!existingTables.has(tableName.toLowerCase())) {
+			await db.execute(createSql);
+		}
 	}
 }
 
 async function initializeDatabase() {
 	const db = createDatabaseClient();
-
-	await db.execute("PRAGMA foreign_keys = ON");
-	await db.execute(`
-		CREATE TABLE IF NOT EXISTS admin_users (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			username TEXT NOT NULL UNIQUE,
-			password_hash TEXT NOT NULL,
-			password_salt TEXT NOT NULL,
-			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`);
-	await db.execute(`
-		CREATE TABLE IF NOT EXISTS admin_sessions (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL,
-			token_hash TEXT NOT NULL UNIQUE,
-			expires_at TEXT NOT NULL,
-			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY(user_id) REFERENCES admin_users(id) ON DELETE CASCADE
-		)
-	`);
-	await db.execute(`
-		CREATE TABLE IF NOT EXISTS award_certificates (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			title TEXT NOT NULL,
-			honor_type TEXT NOT NULL DEFAULT '奖项',
-			competition_name TEXT NOT NULL DEFAULT '',
-			award_name TEXT NOT NULL DEFAULT '',
-			award_year INTEGER NOT NULL,
-			award_level TEXT NOT NULL,
-			description TEXT,
-			image_name TEXT NOT NULL,
-			image_mime_type TEXT NOT NULL,
-			image_base64 TEXT NOT NULL,
-			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`);
-	await db.execute(`
-		CREATE TABLE IF NOT EXISTS blog_articles (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			slug TEXT NOT NULL UNIQUE,
-			title TEXT NOT NULL,
-			description TEXT NOT NULL,
-			category TEXT NOT NULL,
-			tags TEXT NOT NULL DEFAULT '[]',
-			published_at TEXT NOT NULL,
-			article_updated_at TEXT,
-			cover_image TEXT,
-			is_pinned INTEGER NOT NULL DEFAULT 0,
-			draft INTEGER NOT NULL DEFAULT 0,
-			body TEXT NOT NULL,
-			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`);
-	await migrateAwardCertificateSchema(db);
-	await migrateLegacyMarkdownArticles(db);
+	await ensureMissingTables(db);
 	await db.execute({
 		sql: "DELETE FROM admin_sessions WHERE expires_at <= ?",
 		args: [new Date().toISOString()],

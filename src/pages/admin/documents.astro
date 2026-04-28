@@ -27,40 +27,13 @@ const selectedCategory = Astro.url.searchParams.get("category")?.trim() ?? "";
 const selectedState = Astro.url.searchParams.get("state")?.trim() ?? "";
 
 const [allDocuments, editingDocument] = await Promise.all([
-	listAdminArticles(),
+	listAdminArticles({
+		keyword: keyword || undefined,
+		category: selectedCategory || undefined,
+		status: selectedState || undefined,
+	}),
 	editSlug ? getAdminArticleBySlug(editSlug) : Promise.resolve(null),
 ]);
-
-const filteredDocuments = allDocuments.filter((document) => {
-	if (selectedCategory && document.category !== selectedCategory) {
-		return false;
-	}
-
-	if (selectedState === "published" && document.draft) {
-		return false;
-	}
-
-	if (selectedState === "draft" && !document.draft) {
-		return false;
-	}
-
-	if (keyword) {
-		const query = keyword.toLowerCase();
-		const haystack = [
-			document.slug,
-			document.title,
-			document.description,
-			document.category,
-			document.tags.join(" "),
-			document.body,
-		]
-			.join(" ")
-			.toLowerCase();
-		return haystack.includes(query);
-	}
-
-	return true;
-});
 
 const categoryLabels: Record<string, string> = {
 	tech: "技术",
@@ -68,6 +41,25 @@ const categoryLabels: Record<string, string> = {
 	project: "项目",
 	other: "其他",
 };
+
+function getSelectedLabel(
+	options: Array<{ value: string; label: string }>,
+	value: string,
+	fallback: string,
+) {
+	return options.find((option) => option.value === value)?.label ?? fallback;
+}
+
+const documentCategoryFilterOptions: Array<{ value: string; label: string }> =
+	ARTICLE_CATEGORIES.map((category) => ({
+		value: category,
+		label: categoryLabels[category],
+	}));
+
+const documentStateFilterOptions: Array<{ value: string; label: string }> = [
+	{ value: "published", label: "已发布" },
+	{ value: "draft", label: "草稿" },
+];
 
 const statusMessages: Record<string, string> = {
 	created: "文章已创建成功。",
@@ -102,6 +94,8 @@ const toastTitle =
 					? "操作失败"
 					: "提示";
 
+const toastDuration = effectiveStatus === "error" ? 4200 : 3200;
+
 const modalDocument = editingDocument;
 const shouldOpenEditModal = Boolean(modalDocument);
 const shouldOpenCreateModal = createRequested && !shouldOpenEditModal;
@@ -122,14 +116,6 @@ function buildAdminLink(overrides: Record<string, string | undefined>) {
 
 	const query = nextSearch.toString();
 	return `/admin/documents${query ? `?${query}` : ""}`;
-}
-
-function toDatetimeLocalValue(value?: string) {
-	if (!value) {
-		return "";
-	}
-
-	return value.slice(0, 16);
 }
 
 function toDateLabel(value: string) {
@@ -181,47 +167,38 @@ const closeModalUrl = buildAdminLink({
 					data-toast-source
 					data-toast-variant={toastVariant}
 					data-toast-title={toastTitle}
-					data-toast-duration="3200"
-				>
+					data-toast-duration={String(toastDuration)}>
 					{feedbackMessage}
 				</div>
 			)
 		}
 
-		<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5">
+		<div
+			class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5">
 			<div
-				class="mb-4 flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between"
-			>
-				<div>
-					<h2 class="text-xl font-semibold text-white md:text-2xl">文档列表</h2>
-					<p class="mt-2 text-sm text-gray-400">
-						支持新建文章、编辑元信息与正文，也可以导入 Markdown 直接解析。
-					</p>
-				</div>
-				<div class="flex flex-wrap gap-3">
-					<a
-						href="/archive"
-						target="_blank"
-						class="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
-					>
-						<Icon name="ri:archive-line" class="text-base" />
-						查看归档页
-					</a>
+				class="mb-4 flex min-w-0 flex-col gap-3 md:flex-row md:flex-nowrap md:items-center md:justify-between">
+				<h2
+					class="min-w-0 text-xl font-semibold text-white md:text-2xl">
+					文档列表
+				</h2>
+				<div class="flex shrink-0 flex-nowrap gap-3">
 					<a
 						href={createUrl}
-						class="inline-flex min-h-[42px] items-center gap-2 rounded-xl bg-primary-500 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_24px_rgba(14,165,233,0.16)] transition hover:bg-primary-600 hover:shadow-[0_12px_28px_rgba(14,165,233,0.22)]"
-					>
-						<Icon name="ri:add-circle-line" class="text-lg" />
-						新建文章
+						class="inline-flex min-h-[42px] shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-primary-500 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_24px_rgba(14,165,233,0.16)] transition hover:bg-primary-600 hover:shadow-[0_12px_28px_rgba(14,165,233,0.22)]">
+						<Icon name="ri:file-add-line" class="text-lg" />
+						新建
 					</a>
 				</div>
 			</div>
 
-			<form action="/admin/documents" method="GET" class="mb-4 space-y-2.5">
+			<form
+				action="/admin/documents"
+				method="GET"
+				data-admin-documents-filter-form
+				class="mb-4">
 				<div
-					class="grid items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto]"
-				>
-					<div class="relative">
+					class="admin-filter-toolbar grid w-full grid-cols-1 gap-2.5 md:grid-cols-[minmax(0,1fr)_11rem_11rem_auto_auto] md:items-stretch">
+					<div class="relative min-h-[48px] min-w-0">
 						<input
 							type="search"
 							name="q"
@@ -230,57 +207,128 @@ const closeModalUrl = buildAdminLink({
 							class="min-h-[48px] w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-2.5 text-sm text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
 						/>
 					</div>
+					<div
+						class="relative min-h-[48px] min-w-0 w-full"
+						data-custom-select-root
+						data-select-submit-on-change="true">
+						<input
+							type="hidden"
+							name="category"
+							value={selectedCategory}
+							data-select-input
+						/>
+						<details
+							class="custom-select custom-select--filter-toolbar">
+							<summary class="custom-select__trigger">
+								<span
+									class={`custom-select__label ${selectedCategory ? "is-selected" : ""}`}
+									data-select-label
+									data-placeholder="分类"
+									>{
+										getSelectedLabel(
+											documentCategoryFilterOptions,
+											selectedCategory,
+											"分类",
+										)
+									}</span
+								>
+								<Icon
+									name="ri:arrow-down-s-line"
+									class="custom-select__arrow"
+								/>
+							</summary>
+							<div class="custom-select__menu">
+								{
+									documentCategoryFilterOptions.map(
+										(option) => (
+											<button
+												type="button"
+												class={`custom-select__option ${option.value === selectedCategory ? "is-active" : ""}`}
+												data-select-option
+												data-value={option.value}
+												data-label={option.label}>
+												<span>{option.label}</span>
+												<span
+													class="custom-select__check"
+													aria-hidden="true"
+												/>
+											</button>
+										),
+									)
+								}
+							</div>
+						</details>
+					</div>
+					<div
+						class="relative min-h-[48px] min-w-0 w-full"
+						data-custom-select-root
+						data-select-submit-on-change="true">
+						<input
+							type="hidden"
+							name="state"
+							value={selectedState}
+							data-select-input
+						/>
+						<details
+							class="custom-select custom-select--filter-toolbar">
+							<summary class="custom-select__trigger">
+								<span
+									class={`custom-select__label ${selectedState ? "is-selected" : ""}`}
+									data-select-label
+									data-placeholder="状态"
+									>{
+										getSelectedLabel(
+											documentStateFilterOptions,
+											selectedState,
+											"状态",
+										)
+									}</span
+								>
+								<Icon
+									name="ri:arrow-down-s-line"
+									class="custom-select__arrow"
+								/>
+							</summary>
+							<div class="custom-select__menu">
+								{
+									documentStateFilterOptions.map((option) => (
+										<button
+											type="button"
+											class={`custom-select__option ${option.value === selectedState ? "is-active" : ""}`}
+											data-select-option
+											data-value={option.value}
+											data-label={option.label}>
+											<span>{option.label}</span>
+											<span
+												class="custom-select__check"
+												aria-hidden="true"
+											/>
+										</button>
+									))
+								}
+							</div>
+						</details>
+					</div>
 					<button
 						type="submit"
-						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-600 sm:min-w-[112px]"
-					>
+						class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl bg-primary-500 px-5 text-sm font-medium text-white transition-all hover:bg-primary-600 md:min-w-[5.5rem] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+						aria-label="搜索文章">
 						搜索
 					</button>
-				</div>
-				<div
-					class="grid items-center gap-2.5 md:grid-cols-2 xl:grid-cols-[repeat(2,minmax(0,1fr))_auto]"
-				>
-					<select
-						name="category"
-						class="min-h-[48px] rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-2.5 text-sm text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-					>
-						<option value="">全部分类</option>
-						{
-							ARTICLE_CATEGORIES.map((category) => (
-								<option
-									value={category}
-									selected={selectedCategory === category}
-								>
-									{categoryLabels[category]}
-								</option>
-							))
-						}
-					</select>
-					<select
-						name="state"
-						class="min-h-[48px] rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-2.5 text-sm text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-					>
-						<option value="">全部状态</option>
-						<option value="published" selected={selectedState === "published"}>
-							已发布
-						</option>
-						<option value="draft" selected={selectedState === "draft"}>
-							草稿
-						</option>
-					</select>
 					<a
 						href={clearFilterUrl}
-						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/10 px-4 py-2.5 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300 xl:min-w-[112px]"
-					>
+						data-admin-documents-clear
+						class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-white/10 px-5 text-sm font-medium text-gray-300 transition-all hover:border-primary-400 hover:text-primary-300 md:min-w-[5.5rem] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+						aria-label="清空筛选条件">
 						清空
 					</a>
 				</div>
 			</form>
 
-			<div class="space-y-3">
+			<div class="space-y-4" data-admin-documents-results>
 				{
-					filteredDocuments.length > 0 ? (
-						filteredDocuments.map((document) => (
+					allDocuments.length > 0 ? (
+						allDocuments.map((document) => (
 							<article
 								id={
 									highlightSlug === document.slug
@@ -288,105 +336,127 @@ const closeModalUrl = buildAdminLink({
 										: undefined
 								}
 								class:list={[
-									"rounded-2xl border border-white/10 bg-dark-900/60 p-4 md:p-5",
+									"grid gap-2 rounded-2xl border border-white/10 bg-dark-900/60 p-2.5 md:grid-cols-[4rem_minmax(0,1fr)_auto] md:items-start",
 									highlightSlug === document.slug
 										? "border-primary-400/50 shadow-[0_0_0_1px_rgba(34,211,238,0.3)]"
 										: "",
-								]}
-							>
-								<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-									<div class="min-w-0">
-										<div class="flex flex-wrap items-center gap-2">
-											<h3 class="truncate text-lg font-semibold text-white">
-												{document.title}
-											</h3>
-											<span
-												class:list={[
-													"rounded-full border px-3 py-1 text-xs",
-													document.draft
-														? "border-amber-500/20 bg-amber-500/10 text-amber-200"
-														: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
-												]}
-											>
-												{document.draft ? "草稿" : "已发布"}
-											</span>
-											<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1 text-xs text-gray-300">
-												{categoryLabels[document.category]}
-											</span>
-											{document.isPinned && (
-												<span class="rounded-full border border-primary-500/30 bg-primary-500/10 px-3 py-1 text-xs text-primary-200">
-													置顶
-												</span>
-											)}
+								]}>
+								<div
+									class="flex h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-dark-950 ring-1 ring-white/10 md:mx-0">
+									{document.coverImage ? (
+										<img
+											src={document.coverImage}
+											alt=""
+											class="h-full w-full object-cover"
+											loading="lazy"
+											decoding="async"
+										/>
+									) : (
+										<div
+											class="flex h-full w-full items-center justify-center text-gray-600"
+											aria-hidden="true">
+											<Icon
+												name="ri:image-2-line"
+												class="text-2xl opacity-70"
+											/>
 										</div>
-										<p class="mt-2 break-all text-xs text-gray-500">
-											slug: {document.slug}
-										</p>
-										<p class="mt-3 text-sm leading-7 text-gray-400">
-											{document.description || document.excerpt}
-										</p>
-										<div class="mt-4 flex flex-wrap gap-2 text-sm text-gray-300">
-											<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1">
-												发布时间 {toDateLabel(document.publishedAt)}
+									)}
+								</div>
+								<div class="min-w-0 space-y-1.5">
+									<h3 class="break-words text-base font-semibold leading-snug text-white">
+										{document.title}
+									</h3>
+									<div class="flex flex-wrap items-center gap-1.5">
+										<span
+											class:list={[
+												"shrink-0 rounded-full border px-2 py-0.5 text-[11px] whitespace-nowrap leading-tight",
+												document.draft
+													? "border-amber-500/20 bg-amber-500/10 text-amber-200"
+													: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
+											]}>
+											{document.draft ? "草稿" : "已发布"}
+										</span>
+										<span class="shrink-0 rounded-full border border-white/10 bg-dark-800 px-2 py-0.5 text-[11px] whitespace-nowrap leading-tight text-gray-300">
+											{categoryLabels[document.category]}
+										</span>
+										{document.isPinned && (
+											<span class="shrink-0 rounded-full border border-primary-500/30 bg-primary-500/10 px-2 py-0.5 text-[11px] whitespace-nowrap leading-tight text-primary-200">
+												置顶
 											</span>
-											{document.updatedAt && (
-												<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1">
-													更新时间 {toDateLabel(document.updatedAt)}
-												</span>
-											)}
-											<span class="rounded-full border border-white/10 bg-dark-800 px-3 py-1">
-												标签 {document.tags.length}
-											</span>
-										</div>
-										{document.tags.length > 0 && (
-											<div class="mt-3 flex flex-wrap gap-2">
-												{document.tags.map((tag) => (
-													<span class="rounded-full border border-white/10 bg-dark-800 px-2.5 py-1 text-xs text-gray-300">
-														#{tag}
-													</span>
-												))}
-											</div>
 										)}
 									</div>
-
-									<div class="flex flex-wrap gap-2">
-										<a
-											href={`/posts/${document.slug}`}
-											target="_blank"
-											class="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300"
-										>
-											<Icon name="ri:external-link-line" class="text-base" />
-											查看
-										</a>
-										<a
-											href={buildAdminLink({
-												edit: document.slug,
-												create: undefined,
-												status: undefined,
-												code: undefined,
-											})}
-											class="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300"
-										>
-											<Icon name="ri:edit-line" class="text-base" />
-											编辑
-										</a>
-										<button
-											type="button"
-											class="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition hover:border-red-500/40 hover:bg-red-500/15"
-											data-open-delete-modal
-											data-document-slug={document.slug}
-											data-document-title={document.title}
-										>
-											<Icon name="ri:delete-bin-line" class="text-base" />
-											删除
-										</button>
+									<p
+										class="truncate font-mono text-[11px] leading-tight text-gray-500"
+										title={document.slug}>
+										{document.slug}
+									</p>
+									<p class="line-clamp-1 text-xs leading-snug text-gray-400">
+										{document.description ||
+											document.excerpt}
+									</p>
+									<div class="flex flex-wrap gap-x-2 gap-y-0.5 border-t border-white/5 pt-1.5 text-[11px] leading-tight text-gray-400">
+										<span class="whitespace-nowrap">
+											发布{" "}
+											{toDateLabel(document.publishedAt)}
+										</span>
+										{document.updatedAt && (
+											<span class="whitespace-nowrap">
+												· 更新{" "}
+												{toDateLabel(
+													document.updatedAt,
+												)}
+											</span>
+										)}
+										<span class="whitespace-nowrap">
+											· 标签 {document.tags.length}
+										</span>
 									</div>
+									{document.tags.length > 0 && (
+										<div class="flex max-h-7 flex-wrap gap-1 overflow-hidden">
+											{document.tags.map((tag) => (
+												<span class="shrink-0 rounded border border-white/10 bg-dark-800/80 px-1.5 py-px text-[10px] leading-tight text-gray-300">
+													#{tag}
+												</span>
+											))}
+										</div>
+									)}
+								</div>
+
+								<div class="flex shrink-0 flex-row gap-2 border-t border-white/5 pt-2.5 md:flex-col md:border-t-0 md:pt-0">
+									<a
+										href={buildAdminLink({
+											edit: document.slug,
+											create: undefined,
+											status: undefined,
+											code: undefined,
+										})}
+										class="inline-flex min-h-[38px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-gray-200 transition-all hover:border-primary-400 hover:text-primary-300 md:min-w-[84px] md:flex-none focus:outline-none focus:ring-2 focus:ring-primary-500/20">
+										<Icon
+											name="ri:edit-line"
+											class="text-base"
+										/>
+										编辑
+									</a>
+									<button
+										type="button"
+										class="inline-flex min-h-[38px] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-all hover:border-red-500/40 hover:bg-red-500/15 md:min-w-[84px] md:flex-none focus:outline-none focus:ring-2 focus:ring-red-500/20"
+										data-open-delete-modal
+										data-document-slug={document.slug}
+										data-document-title={document.title}>
+										<Icon
+											name="ri:delete-bin-line"
+											class="text-base"
+										/>
+										删除
+									</button>
 								</div>
 							</article>
 						))
 					) : (
 						<div class="rounded-3xl border border-dashed border-white/10 bg-dark-900/40 p-8 text-center">
-							<p class="text-lg font-medium text-white">当前条件下还没有文章</p>
+							<p class="text-lg font-medium text-white">
+								当前条件下还没有文章
+							</p>
 							<p class="mt-3 text-sm text-gray-400">
 								可以换一个筛选条件试试，或者点击右上角“新建文章”新增内容。
 							</p>
@@ -401,40 +471,44 @@ const closeModalUrl = buildAdminLink({
 			data-open={shouldOpenEditor ? "true" : "false"}
 			data-close-url={closeModalUrl}
 			class:list={[
-				"fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto px-3 py-6 sm:px-5 sm:py-8",
+				"fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto px-3 py-4 sm:px-4 sm:py-5",
 				{ hidden: !shouldOpenEditor },
-			]}
-		>
+			]}>
 			<button
 				type="button"
 				class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
 				data-close-document-modal
-				aria-label="关闭弹窗"></button>
+				aria-label="关闭弹窗">
+			</button>
 
 			<div
-				class="relative z-10 my-auto flex max-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[24px] border border-white/10 bg-dark-800/95 shadow-2xl shadow-black/40 sm:max-h-[calc(100vh-4rem)]"
-			>
+				class="document-modal__shell relative z-10 my-auto flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-dark-800/95 shadow-2xl shadow-black/40"
+				style="max-height: min(92dvh, 820px);">
 				<div
-					class="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3 md:px-6"
-				>
+					class="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 bg-white/[0.02] px-4 py-2.5 sm:px-5">
 					<div>
-						<p class="text-sm uppercase tracking-[0.35em] text-primary-400">
-							Document
+						<p
+							id="document-modal-tag"
+							class="text-xs uppercase tracking-[0.35em] text-primary-400">
+							Article
 						</p>
-						<h2 class="mt-3 text-2xl font-semibold text-white">
+						<h2
+							class="mt-1.5 text-lg font-semibold text-white sm:text-xl">
 							{shouldOpenEditModal ? "编辑文章" : "新建文章"}
 						</h2>
-						<p class="mt-2 text-sm text-gray-400">
-							支持直接在线编辑 Markdown，也支持导入 `.md` 文件自动解析
-							frontmatter。
+						<p
+							class="mt-1 text-xs text-gray-500 sm:text-sm sm:text-gray-400">
+							可导入 <code
+								class="rounded bg-white/5 px-1 font-mono text-[11px] text-primary-200/90"
+								>.md</code
+							> 填充字段
 						</p>
 					</div>
 					<button
 						type="button"
 						class="rounded-full p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
 						data-close-document-modal
-						aria-label="关闭"
-					>
+						aria-label="关闭">
 						<Icon name="ri:close-line" class="text-xl" />
 					</button>
 				</div>
@@ -443,8 +517,7 @@ const closeModalUrl = buildAdminLink({
 					id="document-form"
 					method="POST"
 					action="/api/admin/documents/save"
-					class="flex min-h-0 flex-1 flex-col"
-				>
+					class="flex min-h-0 flex-1 flex-col">
 					<input
 						id="document-current-slug"
 						type="hidden"
@@ -452,56 +525,31 @@ const closeModalUrl = buildAdminLink({
 						value={modalDocument?.slug ?? ""}
 					/>
 					<div
-						class="panel-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4 pt-3 md:px-6 md:pb-4 md:pt-4"
-					>
-						<section
-							class="rounded-2xl border border-white/10 bg-dark-900/50 p-4"
-						>
-							<div class="flex items-start gap-3">
-								<div
-									class="mt-0.5 rounded-xl bg-primary-500/10 p-2 text-primary-300"
-								>
-									<Icon name="ri:file-upload-line" class="text-xl" />
-								</div>
-								<div class="min-w-0 flex-1">
-									<h3 class="text-base font-semibold text-white">
-										导入 Markdown
-									</h3>
-									<p class="mt-1 text-sm leading-6 text-gray-400">
-										选择本地 `.md` 或 `.markdown` 文件后，会自动解析 frontmatter
-										和正文并填充到表单中。
-									</p>
-									<div
-										class="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
-									>
-										<input
-											id="document-import-file"
-											type="file"
-											accept=".md,.markdown,text/markdown,text/plain"
-											class="document-form__control document-form__upload"
-										/>
-										<button
-											type="button"
-											id="document-import-button"
-											class="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300 md:min-w-[120px]"
-										>
-											解析导入
-										</button>
-									</div>
-									<p
-										id="document-import-feedback"
-										class="mt-3 text-sm text-gray-400"
-									>
-										导入不会立即保存，你还可以继续修改后再提交。
-									</p>
-								</div>
+						class="document-modal__body panel-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 pb-3 pt-2.5 sm:px-5 sm:pb-4">
+						<div
+							class="rounded-xl border border-white/10 bg-dark-900/45 p-3 sm:p-3.5">
+							<div
+								class="flex items-center justify-between gap-2">
+								<h3 class="text-sm font-semibold text-white">
+									导入 Markdown
+								</h3>
 							</div>
-						</section>
+							<div
+								class="award-form__row award-form__row--import-actions mt-2.5 items-stretch sm:items-end">
+								<input
+									id="document-import-file"
+									type="file"
+									accept=".md,.markdown,text/markdown,text/plain"
+									class="award-form__control award-form__upload min-w-0"
+								/>
+							</div>
+						</div>
 
-						<div class="document-form__grid document-form__grid--primary">
+						<div class="award-form__row award-form__row--primary">
 							<div>
-								<label for="document-title" class="document-form__label"
-									>标题</label
+								<label
+									for="document-title"
+									class="award-form__label">标题</label
 								>
 								<input
 									id="document-title"
@@ -509,182 +557,349 @@ const closeModalUrl = buildAdminLink({
 									type="text"
 									required
 									value={modalDocument?.title ?? ""}
-									class="document-form__control"
+									class="award-form__control"
 									placeholder="例如：如何搭建自己的博客"
 								/>
 							</div>
 							<div>
-								<label for="document-slug" class="document-form__label"
-									>Slug</label
+								<label
+									for="document-slug"
+									class="award-form__label">Slug</label
 								>
 								<input
 									id="document-slug"
 									name="slug"
 									type="text"
 									value={modalDocument?.slug ?? ""}
-									class="document-form__control"
+									class="award-form__control"
 									placeholder="例如：how-to-build-a-blog"
 								/>
-								<p class="mt-2 text-xs text-gray-500">
-									建议使用英文、数字和短横线，提交后将作为文章路径。
-								</p>
 							</div>
 						</div>
 
 						<div>
-							<label for="document-description" class="document-form__label">
+							<label
+								for="document-description"
+								class="award-form__label">
 								摘要
 							</label>
 							<textarea
 								id="document-description"
 								name="description"
 								rows="3"
-								class="document-form__control document-form__textarea"
-								placeholder="用于首页卡片和文章详情页简介展示"
+								class="award-form__control award-form__textarea min-h-[5.5rem] resize-y"
+								placeholder="用于首页与详情简介"
 								>{modalDocument?.description ?? ""}</textarea
 							>
 						</div>
 
-						<div class="document-form__grid document-form__grid--meta">
-							<div>
-								<label for="document-category" class="document-form__label">
-									分类
-								</label>
-								<select
+						<div class="award-form__row award-form__row--meta3">
+							<div
+								class="relative min-h-[48px] min-w-0"
+								data-custom-select-root
+								data-select-submit-on-change="false"
+								data-modal-select="category">
+								<input
+									type="hidden"
 									id="document-category"
 									name="category"
-									class="document-form__control"
-								>
-									{
-										ARTICLE_CATEGORIES.map((category) => (
-											<option
-												value={category}
-												selected={
-													(modalDocument?.category ?? "tech") === category
-												}
-											>
-												{categoryLabels[category]}
-											</option>
-										))
-									}
-								</select>
+									value={modalDocument?.category ?? "tech"}
+									data-select-input
+								/>
+								<p class="award-form__label">分类</p>
+								<details
+									class="custom-select custom-select--filter-toolbar">
+									<summary class="custom-select__trigger">
+										<span
+											class="custom-select__label is-selected"
+											data-select-label
+											data-placeholder="分类">
+											{
+												getSelectedLabel(
+													documentCategoryFilterOptions,
+													modalDocument?.category ??
+														"tech",
+													"分类",
+												)
+											}
+										</span>
+										<Icon
+											name="ri:arrow-down-s-line"
+											class="custom-select__arrow"
+										/>
+									</summary>
+									<div class="custom-select__menu">
+										{
+											ARTICLE_CATEGORIES.map(
+												(category) => (
+													<button
+														type="button"
+														class={`custom-select__option ${(modalDocument?.category ?? "tech") === category ? "is-active" : ""}`}
+														data-select-option
+														data-value={category}
+														data-label={
+															categoryLabels[
+																category
+															]
+														}>
+														<span>
+															{
+																categoryLabels[
+																	category
+																]
+															}
+														</span>
+														<span
+															class="custom-select__check"
+															aria-hidden="true"
+														/>
+													</button>
+												),
+											)
+										}
+									</div>
+								</details>
 							</div>
-							<div>
-								<label for="document-tags" class="document-form__label"
-									>标签</label
+							<div
+								class="relative min-h-[48px] min-w-0"
+								data-custom-select-root
+								data-select-submit-on-change="false"
+								data-modal-select="draft">
+								<input
+									type="hidden"
+									id="document-draft"
+									name="draft"
+									value={modalDocument?.draft
+										? "true"
+										: "false"}
+									data-select-input
+								/>
+								<p class="award-form__label">状态</p>
+								<details
+									class="custom-select custom-select--filter-toolbar">
+									<summary class="custom-select__trigger">
+										<span
+											class="custom-select__label is-selected"
+											data-select-label
+											data-placeholder="状态">
+											{
+												modalDocument?.draft
+													? "草稿"
+													: "已发布"
+											}
+										</span>
+										<Icon
+											name="ri:arrow-down-s-line"
+											class="custom-select__arrow"
+										/>
+									</summary>
+									<div class="custom-select__menu">
+										<button
+											type="button"
+											class:list={[
+												"custom-select__option",
+												!modalDocument?.draft
+													? "is-active"
+													: "",
+											]}
+											data-select-option
+											data-value="false"
+											data-label="已发布">
+											<span>已发布</span>
+											<span
+												class="custom-select__check"
+												aria-hidden="true"></span>
+										</button>
+										<button
+											type="button"
+											class:list={[
+												"custom-select__option",
+												modalDocument?.draft
+													? "is-active"
+													: "",
+											]}
+											data-select-option
+											data-value="true"
+											data-label="草稿">
+											<span>草稿</span>
+											<span
+												class="custom-select__check"
+												aria-hidden="true"></span>
+										</button>
+									</div>
+								</details>
+							</div>
+							<div
+								class="doc-form__pin-col flex min-w-0 flex-col justify-end">
+								<p class="award-form__label">置顶</p>
+								<label
+									for="document-is-pinned"
+									class="doc-form__pin-field">
+									<input
+										id="document-is-pinned"
+										name="isPinned"
+										type="checkbox"
+										class="doc-form__pin-check"
+										value="true"
+										checked={Boolean(
+											modalDocument?.isPinned,
+										)}
+									/>
+									<span
+										class="doc-form__pin-hint doc-form__pin-hint--off"
+										>时间排序</span
+									>
+									<span
+										class="doc-form__pin-hint doc-form__pin-hint--on"
+										>列表优先</span
+									>
+									<span
+										class="doc-form__pin-rail"
+										aria-hidden="true">
+										<span class="doc-form__pin-knob"></span>
+									</span>
+								</label>
+							</div>
+						</div>
+
+						<div
+							class="award-form__row award-form__row--tags-cover">
+							<div class="min-w-0">
+								<label
+									for="document-tags"
+									class="award-form__label">标签</label
 								>
 								<input
 									id="document-tags"
 									name="tags"
 									type="text"
-									value={(modalDocument?.tags ?? []).join(", ")}
-									class="document-form__control"
-									placeholder="多个标签请用英文逗号分隔"
-								/>
-							</div>
-							<div>
-								<label for="document-published-at" class="document-form__label">
-									发布时间
-								</label>
-								<input
-									id="document-published-at"
-									name="publishedAt"
-									type="datetime-local"
-									required
-									value={toDatetimeLocalValue(
-										modalDocument?.publishedAt ?? new Date().toISOString(),
+									value={(modalDocument?.tags ?? []).join(
+										", ",
 									)}
-									class="document-form__control"
+									class="award-form__control"
+									placeholder="用英文逗号分隔"
 								/>
 							</div>
-							<div>
-								<label for="document-updated-at" class="document-form__label">
-									更新时间
-								</label>
-								<input
-									id="document-updated-at"
-									name="updatedAt"
-									type="datetime-local"
-									value={toDatetimeLocalValue(modalDocument?.updatedAt)}
-									class="document-form__control"
-								/>
-							</div>
-						</div>
-
-						<div class="document-form__grid document-form__grid--meta">
-							<div>
-								<label for="document-cover-image" class="document-form__label">
-									封面图（可选）
-								</label>
+							<div class="min-w-0">
+								<div
+									class="award-form__label mb-1.5 !flex min-h-[1.375rem] items-center justify-between gap-3">
+									<label
+										for="document-cover-image"
+										class="mb-0 shrink-0 cursor-pointer leading-none">
+										封面图
+									</label>
+									<span
+										class="doc-cover-preview-tip group relative inline-flex shrink-0 items-center"
+										tabindex="0"
+										aria-label="悬停或聚焦此处查看封面预览">
+										<span
+											class="cursor-default border-b border-dotted border-primary-400/45 text-xs font-medium leading-none text-primary-300/95 hover:text-primary-200">
+											预览
+										</span>
+										<span
+											class="doc-cover-preview-tip__panel invisible absolute right-0 top-full z-[70] mt-1 w-max max-w-[min(calc(100vw-2rem),300px)] rounded-xl border border-white/15 bg-dark-900/98 p-2 opacity-0 shadow-[0_16px_40px_rgba(0,0,0,0.45)] backdrop-blur-md transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+											<div
+												class="doc-cover-preview-tip__frame flex max-h-52 min-h-[5rem] w-[min(268px,82vw)] items-center justify-center rounded-lg bg-dark-950/95 p-1">
+												<img
+													id="document-cover-preview-img"
+													alt=""
+													class="doc-cover-preview-tip__img max-h-48 max-w-full object-contain"
+													loading="lazy"
+													decoding="async"
+												/>
+												<span
+													id="document-cover-preview-empty"
+													class="hidden px-3 py-6 text-center text-xs leading-relaxed text-gray-500">
+													填写有效图片地址后，悬停「预览」查看，建议使用完整
+													http(s) 链接
+												</span>
+											</div>
+										</span>
+									</span>
+								</div>
 								<input
 									id="document-cover-image"
 									name="coverImage"
 									type="text"
+									inputmode="url"
+									autocomplete="off"
 									value={modalDocument?.coverImage ?? ""}
-									class="document-form__control"
-									placeholder="例如：/images/cover.png"
+									class="award-form__control"
+									placeholder="https://example.com/cover.jpg"
 								/>
-							</div>
-							<div>
-								<label for="document-draft" class="document-form__label"
-									>状态</label
-								>
-								<select
-									id="document-draft"
-									name="draft"
-									class="document-form__control"
-								>
-									<option value="false" selected={!modalDocument?.draft}>
-										已发布
-									</option>
-									<option value="true" selected={Boolean(modalDocument?.draft)}>
-										草稿
-									</option>
-								</select>
+								<p
+									id="document-cover-preview-fallback"
+									class="mt-2 hidden text-xs text-amber-200/90">
+								</p>
 							</div>
 						</div>
 
-						<label class="document-form__checkbox">
-							<input
-								id="document-is-pinned"
-								name="isPinned"
-								type="checkbox"
-								value="true"
-								checked={Boolean(modalDocument?.isPinned)}
-							/>
-							<span>设为置顶文章</span>
-						</label>
-
 						<div>
-							<label for="document-body" class="document-form__label"
-								>Markdown 正文</label
-							>
-							<textarea
-								id="document-body"
-								name="body"
-								rows="18"
-								class="document-form__control document-form__editor"
-								placeholder="在这里直接编写 Markdown 正文..."
-								>{modalDocument?.body ?? ""}</textarea
-							>
+							<div
+								class="doc-md-toolbar mb-1.5 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+								<label
+									for="document-body"
+									class="doc-md-heading award-form__label !mb-0 min-w-0 shrink-0 sm:self-center"
+									>正文</label
+								>
+								<div
+									class="doc-md-segment w-full min-w-0 sm:max-w-none sm:shrink-0"
+									data-doc-md-tabs
+									role="tablist"
+									aria-label="正文视图">
+									<button
+										type="button"
+										data-doc-md-mode="edit"
+										class="doc-md-tab is-active">
+										编辑
+									</button>
+									<button
+										type="button"
+										data-doc-md-mode="preview"
+										class="doc-md-tab">
+										预览
+									</button>
+									<button
+										type="button"
+										data-doc-md-mode="split"
+										class="doc-md-tab">
+										分栏
+									</button>
+								</div>
+							</div>
+							<div
+								data-doc-md-panels
+								class="doc-md-panels doc-md-panels--split">
+								<textarea
+									id="document-body"
+									name="body"
+									rows="14"
+									class="panel-scrollbar award-form__control document-body-editor award-form__textarea"
+									placeholder="在此编写正文，右侧可查看渲染效果"
+									data-doc-md-source
+									>{modalDocument?.body ?? ""}</textarea
+								>
+								<div
+									class="document-md-preview panel-scrollbar prose prose-invert prose-sm max-w-none"
+									data-doc-md-preview
+									aria-label="Markdown 渲染预览">
+								</div>
+							</div>
 						</div>
 					</div>
 
 					<div
-						class="flex flex-wrap items-center justify-end gap-3 border-t border-white/10 bg-white/[0.02] px-4 py-3 md:px-6"
-					>
-						<a
-							href={closeModalUrl}
-							class="inline-flex min-h-[42px] items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
-						>
-							取消
-						</a>
+						class="shrink-0 border-t border-white/10 bg-dark-900/40 px-4 py-2.5 sm:px-5">
 						<button
 							type="submit"
-							class="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-600"
-						>
-							<Icon name="ri:save-line" class="text-base" />
-							{shouldOpenEditModal ? "保存修改" : "创建文章"}
+							class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600">
+							<Icon
+								name={shouldOpenEditModal
+									? "ri:save-line"
+									: "ri:file-add-line"}
+								class="text-lg"
+							/>
+							{shouldOpenEditModal ? "保存" : "新建"}
 						</button>
 					</div>
 				</form>
@@ -693,53 +908,55 @@ const closeModalUrl = buildAdminLink({
 
 		<div
 			id="document-delete-modal"
-			class="fixed inset-0 z-[210] hidden items-center justify-center px-4"
-		>
+			class="fixed inset-0 z-[210] hidden items-center justify-center p-4">
 			<button
 				type="button"
 				class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
 				data-close-delete-modal
-				aria-label="关闭删除确认"></button>
+				aria-label="关闭删除确认">
+			</button>
 			<div
-				class="relative z-10 w-full max-w-md rounded-[24px] border border-white/10 bg-dark-800/95 p-6 shadow-2xl shadow-black/40"
-			>
-				<div class="flex items-start justify-between gap-4">
-					<div>
-						<p class="text-sm uppercase tracking-[0.35em] text-red-300">
-							Delete
-						</p>
-						<h3 class="mt-3 text-xl font-semibold text-white">确认删除文章</h3>
+				class="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-dark-800/95 p-6 shadow-2xl shadow-black/40">
+				<div class="flex items-start gap-4">
+					<div
+						class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-500/10 text-red-300">
+						<Icon name="ri:delete-bin-line" class="text-xl" />
 					</div>
-					<button
-						type="button"
-						class="rounded-full p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
-						data-close-delete-modal
-						aria-label="关闭"
-					>
-						<Icon name="ri:close-line" class="text-xl" />
-					</button>
+					<div class="min-w-0 flex-1">
+						<h2 class="text-xl font-semibold text-white">
+							确认删除文章
+						</h2>
+						<p class="mt-2 text-sm leading-6 text-gray-400">
+							删除后将无法恢复。将删除
+							<span
+								id="document-delete-title"
+								class="text-gray-200"></span>
+							，并同步移除对应数据记录。
+						</p>
+					</div>
 				</div>
-				<p class="mt-4 text-sm leading-7 text-gray-400">
-					你将删除文章
-					<span id="document-delete-title" class="font-medium text-white"
-					></span>
-					，对应的 Markdown 文件也会一并移除。
-				</p>
-				<form method="POST" action="/api/admin/documents/delete" class="mt-6">
-					<input id="document-delete-slug" type="hidden" name="slug" value="" />
+				<form
+					method="POST"
+					action="/api/admin/documents/delete"
+					class="mt-6">
+					<input
+						id="document-delete-slug"
+						type="hidden"
+						name="slug"
+						value=""
+					/>
 					<div class="flex justify-end gap-3">
 						<button
 							type="button"
-							class="inline-flex min-h-[42px] items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
+							class="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition-all hover:border-primary-400 hover:text-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
 							data-close-delete-modal
-						>
+							aria-label="取消删除">
 							取消
 						</button>
 						<button
 							type="submit"
-							class="inline-flex min-h-[42px] items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:border-red-500/40 hover:bg-red-500/15"
-						>
-							确认删除
+							class="rounded-2xl bg-red-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/20">
+							确定删除
 						</button>
 					</div>
 				</form>
@@ -749,33 +966,30 @@ const closeModalUrl = buildAdminLink({
 </BaseLayout>
 
 <style>
-	.document-form__grid {
+	/* 与 admin/awards 荣誉表单对齐 */
+	.award-form__row {
 		display: grid;
 		gap: 1rem;
+		align-items: start;
 	}
 
-	.document-form__grid--primary,
-	.document-form__grid--meta {
-		grid-template-columns: repeat(1, minmax(0, 1fr));
-	}
-
-	.document-form__label {
-		margin-bottom: 0.55rem;
-		display: inline-flex;
-		font-size: 0.92rem;
+	.award-form__label {
+		margin-bottom: 0.5rem;
+		display: block;
+		font-size: 0.875rem;
 		font-weight: 500;
-		color: rgb(226 232 240);
+		color: rgb(229 231 235);
 	}
 
-	.document-form__control {
-		min-height: 48px;
+	.award-form__control,
+	.award-form__textarea {
 		width: 100%;
 		border-radius: 1rem;
 		border: 1px solid rgb(255 255 255 / 0.1);
-		background: rgb(17 24 39 / 0.78);
-		padding: 0.8rem 1rem;
-		font-size: 0.95rem;
-		color: rgb(241 245 249);
+		background: rgb(15 23 42 / 0.8);
+		padding: 0.875rem 1rem;
+		color: rgb(243 244 246);
+		font-size: 0.9rem;
 		outline: none;
 		transition:
 			border-color 0.2s ease,
@@ -783,137 +997,1010 @@ const closeModalUrl = buildAdminLink({
 			background-color 0.2s ease;
 	}
 
-	.document-form__control:focus {
-		border-color: rgb(56 189 248 / 0.7);
-		box-shadow: 0 0 0 4px rgb(14 165 233 / 0.12);
+	.award-form__control {
+		min-height: 52px;
 	}
 
-	.document-form__control::placeholder {
+	.award-form__control::placeholder,
+	.award-form__textarea::placeholder {
 		color: rgb(107 114 128);
 	}
 
-	.document-form__textarea {
-		min-height: 108px;
-		resize: vertical;
+	.award-form__control:focus,
+	.award-form__textarea:focus {
+		border-color: rgb(96 165 250 / 0.5);
+		box-shadow: 0 0 0 4px rgb(59 130 246 / 0.12);
 	}
 
-	.document-form__editor {
-		min-height: 420px;
-		resize: vertical;
+	.award-form__upload {
+		display: block;
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+		font-size: 0.875rem;
+		color: rgb(209 213 219);
+	}
+
+	.award-form__upload::file-selector-button {
+		margin-right: 0.85rem;
+		border: 0;
+		border-radius: 9999px;
+		background: rgb(59 130 246 / 0.14);
+		padding: 0.5rem 0.95rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: rgb(224 242 254);
+		cursor: pointer;
+	}
+
+	.award-form__textarea {
+		line-height: 1.65;
+	}
+
+	textarea.award-form__control.document-body-editor,
+	textarea.award-form__textarea.document-body-editor {
 		font-family:
-			"JetBrains Mono", "Fira Code", Consolas, "Liberation Mono", Menlo,
-			monospace;
-		line-height: 1.75;
+			"JetBrains Mono", "Fira Code", Consolas, ui-monospace, monospace;
+		font-size: 0.86rem;
+		line-height: 1.7;
+		min-height: 200px;
+		resize: vertical;
 	}
 
-	.document-form__upload {
+	/* 弹窗内下拉与列表筛选一致，并避免被裁切 */
+	#document-modal .custom-select__menu {
+		z-index: 50;
+	}
+
+	#document-modal [data-modal-select] {
+		position: relative;
+		z-index: 0;
+	}
+
+	#document-modal [data-modal-select]:has(.custom-select[open]) {
+		z-index: 20;
+	}
+
+	/* 与分类/状态下拉同级的置顶开关：同触发器质感 */
+	#document-modal .doc-form__pin-check {
+		position: absolute;
+		margin: 0;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	#document-modal .doc-form__pin-field {
+		position: relative;
+		display: flex;
+		min-height: 52px;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem 0.9rem;
+		border-radius: 1rem;
+		border: 1px solid rgb(255 255 255 / 0.1);
+		background: linear-gradient(
+			180deg,
+			rgb(42 48 64 / 0.95),
+			rgb(35 41 55 / 0.95)
+		);
+		padding: 0.65rem 0.9rem 0.65rem 1rem;
+		font-size: 0.95rem;
+		font-weight: 500;
+		cursor: pointer;
+		line-height: 1.3;
+		box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+		transition:
+			border-color 0.2s ease,
+			background-color 0.2s ease,
+			box-shadow 0.2s ease;
+		user-select: none;
+	}
+
+	#document-modal .doc-form__pin-field:hover {
+		border-color: rgb(96 165 250 / 0.45);
+		background: rgb(45 55 72 / 0.95);
+		box-shadow:
+			0 0 0 1px rgb(59 130 246 / 0.22),
+			0 0 0 3px rgb(59 130 246 / 0.12);
+	}
+
+	#document-modal
+		.doc-form__pin-field:has(.doc-form__pin-check:focus-visible) {
+		border-color: rgb(96 165 250 / 0.5);
+		box-shadow: 0 0 0 3px rgb(59 130 246 / 0.18);
+	}
+
+	#document-modal .doc-form__pin-hint--on {
+		display: none;
+		flex: 1 1 auto;
+		min-width: 0;
+		color: rgb(186 230 253);
+	}
+
+	#document-modal
+		.doc-form__pin-field:has(.doc-form__pin-check:checked)
+		.doc-form__pin-hint--off {
+		display: none;
+	}
+
+	#document-modal
+		.doc-form__pin-field:has(.doc-form__pin-check:checked)
+		.doc-form__pin-hint--on {
+		display: block;
+	}
+
+	#document-modal .doc-form__pin-hint--off {
+		flex: 1 1 auto;
+		min-width: 0;
+		color: rgb(156 163 175);
+	}
+
+	#document-modal .doc-form__pin-rail {
+		position: relative;
+		width: 2.75rem;
+		height: 1.5rem;
+		flex-shrink: 0;
+		border-radius: 9999px;
+		background: rgb(30 41 59 / 0.95);
+		box-shadow:
+			inset 0 1px 2px rgb(0 0 0 / 0.28),
+			0 1px 0 rgb(255 255 255 / 0.04);
+		border: 1px solid rgb(255 255 255 / 0.1);
+		transition:
+			background 0.2s ease,
+			border-color 0.2s ease,
+			box-shadow 0.2s;
+	}
+
+	#document-modal .doc-form__pin-knob {
+		position: absolute;
+		left: 0.2rem;
+		top: 50%;
+		width: 1.1rem;
+		height: 1.1rem;
+		border-radius: 9999px;
+		background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+		transform: translateY(-50%);
+		transition: transform 0.2s ease;
+	}
+
+	#document-modal
+		.doc-form__pin-field:has(.doc-form__pin-check:checked)
+		.doc-form__pin-rail {
+		background: linear-gradient(180deg, #0284c7, #0369a1);
+		border-color: rgb(14 165 233 / 0.45);
+		box-shadow:
+			inset 0 1px 0 rgb(255 255 255 / 0.2),
+			0 0 0 1px rgb(0 0 0 / 0.12);
+	}
+
+	#document-modal
+		.doc-form__pin-field:has(.doc-form__pin-check:checked)
+		.doc-form__pin-knob {
+		transform: translateY(-50%) translateX(1.15rem);
+	}
+
+	#document-modal .doc-md-heading {
+		line-height: 1.35;
+	}
+
+	@media (min-width: 640px) {
+		#document-modal .doc-md-heading {
+			line-height: 1.2;
+		}
+	}
+
+	.award-form__row--import-actions {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.doc-md-segment {
+		display: flex;
+		width: 100%;
+		min-width: 0;
+		flex-wrap: nowrap;
+		align-items: stretch;
+		gap: 0.25rem;
+		border-radius: 0.75rem;
+		border: 1px solid rgb(255 255 255 / 0.1);
+		background: rgb(15 23 42 / 0.75);
+		padding: 0.2rem 0.25rem;
+	}
+
+	@media (min-width: 640px) {
+		.doc-md-segment {
+			width: auto;
+			min-width: 16.5rem;
+		}
+	}
+
+	.doc-md-tab {
+		display: flex;
+		min-width: 3.75rem;
+		flex: 1 1 0;
+		height: 2.25rem;
+		align-items: center;
+		justify-content: center;
+		padding: 0 0.4rem;
+		border: 0;
+		border-radius: 0.5rem;
+		background: transparent;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		line-height: 1.2;
+		white-space: nowrap;
+		color: rgb(156 163 175);
+		cursor: pointer;
+		transition:
+			color 0.15s ease,
+			background 0.15s ease,
+			box-shadow 0.15s ease;
+	}
+
+	.doc-md-tab:hover {
+		color: rgb(226 232 240);
+	}
+
+	.doc-md-tab.is-active {
+		background: rgb(15 23 42);
+		color: rgb(191 219 254);
+		box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1);
+	}
+
+	.doc-md-panels {
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.doc-md-panels--split {
+		min-height: min(38vh, 20rem);
+	}
+
+	.doc-md-panels--edit [data-doc-md-preview] {
+		display: none !important;
+	}
+
+	.doc-md-panels--preview [data-doc-md-source] {
+		display: none !important;
+	}
+
+	@media (min-width: 640px) {
+		.award-form__row--import-actions {
+			grid-template-columns: minmax(0, 1fr) auto;
+		}
+
+		.doc-md-panels--split {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			align-items: stretch;
+		}
+	}
+
+	@media (max-width: 639px) {
+		.doc-md-panels--split [data-doc-md-source],
+		.doc-md-panels--split [data-doc-md-preview] {
+			min-height: 12rem;
+		}
+	}
+
+	.document-md-preview {
+		margin: 0;
+		border-radius: 1rem;
+		border: 1px solid rgb(255 255 255 / 0.1);
+		background: rgb(2 6 23 / 0.55);
+		padding: 1rem 1.1rem 1.25rem;
+		min-height: 12rem;
+	}
+
+	.document-md-preview :where(pre) {
+		border-radius: 0.6rem;
+		margin-top: 0.75em;
+		margin-bottom: 0.75em;
+		padding: 0.9rem 1rem;
+		background: rgb(15 23 42 / 0.9);
+		font-size: 0.8rem;
+		line-height: 1.5;
+	}
+
+	.document-md-preview :where(a) {
+		color: rgb(125 211 252);
+	}
+
+	.document-md-preview :where(img) {
+		border-radius: 0.5rem;
+	}
+
+	/* 与 admin/awards 荣誉管理一致的通知条样式 */
+	:global(.notification-stack) {
+		position: fixed;
+		top: 5rem;
+		right: 1rem;
+		z-index: 260;
+		display: flex;
+		width: min(calc(100vw - 2rem), 24rem);
+		flex-direction: column;
+		gap: 0.85rem;
+		pointer-events: none;
+	}
+
+	@media (min-width: 768px) {
+		:global(.notification-stack) {
+			top: 6rem;
+		}
+	}
+
+	:global(.notification) {
+		position: relative;
+		overflow: hidden;
+		border-radius: 1.15rem;
+		border: 1px solid rgb(255 255 255 / 0.12);
+		padding: 1rem 1rem 0.95rem;
+		box-shadow:
+			0 20px 45px rgb(2 6 23 / 0.28),
+			0 8px 18px rgb(15 23 42 / 0.18);
+		backdrop-filter: blur(14px);
+		pointer-events: auto;
+		opacity: 0;
+		transform: translate3d(0, -14px, 0) scale(0.96);
+	}
+
+	:global(.notification.is-entering) {
+		animation: notification-in 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+	}
+
+	:global(.notification.is-leaving) {
+		animation: notification-out 0.28s ease forwards;
+	}
+
+	:global(.notification--success) {
+		background:
+			radial-gradient(
+				circle at top right,
+				rgb(74 222 128 / 0.22),
+				transparent 42%
+			),
+			linear-gradient(180deg, rgb(22 101 52 / 0.96), rgb(20 83 45 / 0.96));
+		color: rgb(240 253 244);
+	}
+
+	:global(.notification--error) {
+		background:
+			radial-gradient(
+				circle at top right,
+				rgb(248 113 113 / 0.22),
+				transparent 42%
+			),
+			linear-gradient(180deg, rgb(153 27 27 / 0.96), rgb(127 29 29 / 0.96));
+		color: rgb(254 242 242);
+	}
+
+	:global(.notification__glow) {
+		position: absolute;
+		inset: -35% auto auto 68%;
+		height: 7rem;
+		width: 7rem;
+		border-radius: 9999px;
+		background: rgb(255 255 255 / 0.12);
+		filter: blur(18px);
+		pointer-events: none;
+	}
+
+	:global(.notification__row) {
+		position: relative;
+		display: flex;
+		align-items: flex-start;
+		gap: 0.85rem;
+	}
+
+	:global(.notification__icon) {
+		display: inline-flex;
+		height: 2.25rem;
+		width: 2.25rem;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border-radius: 9999px;
+		border: 1px solid rgb(255 255 255 / 0.15);
+		background: rgb(255 255 255 / 0.1);
+		box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+	}
+
+	:global(.notification__icon svg) {
+		height: 1.1rem;
+		width: 1.1rem;
+	}
+
+	:global(.notification__content) {
+		min-width: 0;
+		flex: 1;
+	}
+
+	:global(.notification__title) {
+		font-size: 0.95rem;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+	}
+
+	:global(.notification__message) {
+		margin-top: 0.25rem;
+		font-size: 0.875rem;
+		line-height: 1.55;
+		color: rgb(255 255 255 / 0.9);
+		word-break: break-word;
+	}
+
+	:global(.notification__close) {
+		display: inline-flex;
+		height: 2rem;
+		width: 2rem;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border: 0;
+		border-radius: 9999px;
+		background: rgb(255 255 255 / 0.08);
+		color: inherit;
+		cursor: pointer;
+		transition:
+			background-color 0.18s ease,
+			transform 0.18s ease;
+	}
+
+	:global(.notification__close:hover) {
+		background: rgb(255 255 255 / 0.16);
+		transform: scale(1.04);
+	}
+
+	:global(.notification__progress) {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 3px;
+		background: rgb(255 255 255 / 0.18);
+		transform-origin: left center;
+		animation: notification-progress linear forwards;
+		animation-duration: var(--toast-duration, 3000ms);
+	}
+
+	@keyframes notification-in {
+		0% {
+			opacity: 0;
+			transform: translate3d(0, -14px, 0) scale(0.96);
+		}
+		65% {
+			opacity: 1;
+			transform: translate3d(0, 4px, 0) scale(1.01);
+		}
+		100% {
+			opacity: 1;
+			transform: translate3d(0, 0, 0) scale(1);
+		}
+	}
+
+	@keyframes notification-out {
+		0% {
+			opacity: 1;
+			transform: translate3d(0, 0, 0) scale(1);
+		}
+		100% {
+			opacity: 0;
+			transform: translate3d(0, -10px, 0) scale(0.97);
+		}
+	}
+
+	@keyframes notification-progress {
+		from {
+			transform: scaleX(1);
+		}
+		to {
+			transform: scaleX(0);
+		}
+	}
+
+	.custom-select {
+		position: relative;
+	}
+
+	.custom-select--filter-toolbar {
+		width: 100%;
+	}
+
+	.custom-select--filter-toolbar .custom-select__trigger {
+		min-height: 48px;
 		padding-top: 0.65rem;
 		padding-bottom: 0.65rem;
 	}
 
-	.document-form__checkbox {
-		display: inline-flex;
+	.custom-select > summary {
+		list-style: none;
+	}
+
+	.custom-select > summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.custom-select__trigger {
+		display: flex;
+		min-height: 52px;
 		align-items: center;
-		gap: 0.7rem;
-		font-size: 0.95rem;
-		color: rgb(226 232 240);
-	}
-
-	.document-form__checkbox input {
-		height: 1rem;
-		width: 1rem;
-		accent-color: rgb(14 165 233);
-	}
-
-	.document-toast {
-		position: fixed;
-		right: 1rem;
-		top: 1rem;
-		z-index: 260;
-		max-width: min(420px, calc(100vw - 2rem));
+		justify-content: space-between;
+		gap: 14px;
 		border-radius: 1rem;
 		border: 1px solid rgb(255 255 255 / 0.1);
-		background: rgb(15 23 42 / 0.95);
-		padding: 0.95rem 1rem;
+		background: linear-gradient(
+			180deg,
+			rgb(42 48 64 / 0.95),
+			rgb(35 41 55 / 0.95)
+		);
+		padding: 0.85rem 1rem;
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: rgb(243 244 246);
+		cursor: pointer;
+		transition:
+			border-color 0.2s ease,
+			box-shadow 0.2s ease,
+			background-color 0.2s ease,
+			transform 0.2s ease;
+		user-select: none;
+	}
+
+	.custom-select[open] .custom-select__trigger,
+	.custom-select__trigger:hover {
+		border-color: rgb(96 165 250 / 0.45);
+		background: rgb(45 55 72 / 0.95);
+		box-shadow:
+			0 12px 28px rgb(2 6 23 / 0.22),
+			0 0 0 4px rgb(59 130 246 / 0.12);
+	}
+
+	.custom-select__label {
+		color: rgb(156 163 175);
+	}
+
+	.custom-select__label.is-selected {
+		color: rgb(243 244 246);
+	}
+
+	.custom-select__arrow {
+		flex-shrink: 0;
+		font-size: 1.25rem;
+		color: rgb(156 163 175);
+		transition:
+			transform 0.2s ease,
+			color 0.2s ease;
+	}
+
+	.custom-select[open] .custom-select__arrow {
+		transform: rotate(180deg);
+		color: rgb(147 197 253);
+	}
+
+	.custom-select__menu {
+		position: absolute;
+		top: calc(100% + 0.35rem);
+		left: 0;
+		right: 0;
+		z-index: 30;
+		max-height: 320px;
+		min-width: 100%;
+		overflow-y: auto;
+		border-radius: 1rem;
+		border: 1px solid rgb(255 255 255 / 0.08);
+		background: rgb(31 41 55 / 0.98);
+		padding: 0.45rem;
 		box-shadow: 0 18px 45px rgb(2 6 23 / 0.45);
-		backdrop-filter: blur(14px);
+		backdrop-filter: blur(12px);
+		animation: admin-doc-select-menu-in 0.16s ease-out;
 	}
 
-	.document-toast__title {
-		font-size: 0.92rem;
-		font-weight: 600;
-		color: rgb(248 250 252);
+	.custom-select__option {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border: 0;
+		border-radius: 0.8rem;
+		background: transparent;
+		padding: 0.85rem 0.95rem;
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: rgb(209 213 219);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			background-color 0.18s ease,
+			color 0.18s ease,
+			transform 0.18s ease;
 	}
 
-	.document-toast__message {
-		margin-top: 0.35rem;
-		font-size: 0.9rem;
-		line-height: 1.65;
-		color: rgb(203 213 225);
+	.custom-select__option:hover,
+	.custom-select__option.is-active {
+		background: rgb(59 130 246 / 0.12);
+		color: rgb(191 219 254);
+		transform: translateX(2px);
 	}
 
-	.document-toast[data-variant="success"] {
-		border-color: rgb(16 185 129 / 0.24);
+	.custom-select__check {
+		height: 0.75rem;
+		width: 0.75rem;
+		flex-shrink: 0;
+		border-radius: 9999px;
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px rgb(100 116 139);
+		transition:
+			background-color 0.18s ease,
+			box-shadow 0.18s ease,
+			transform 0.18s ease;
 	}
 
-	.document-toast[data-variant="error"] {
-		border-color: rgb(239 68 68 / 0.24);
+	.custom-select__option.is-active .custom-select__check {
+		background: rgb(96 165 250);
+		box-shadow: inset 0 0 0 2px rgb(30 41 59);
+		transform: scale(1.05);
 	}
 
-	@media (min-width: 768px) {
-		.document-form__grid--primary {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+	@keyframes admin-doc-select-menu-in {
+		from {
+			opacity: 0;
+			transform: translateY(-6px) scale(0.98);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
+	}
+
+	@media (min-width: 640px) {
+		.award-form__row--primary {
+			grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.9fr);
 		}
 
-		.document-form__grid--meta {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+		/* 分类 | 状态 | 置顶（第三列随内容，不抢宽度） */
+		.award-form__row--meta3 {
+			grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.95fr) minmax(
+					7.5rem,
+					auto
+				);
+			align-items: end;
+		}
+
+		.award-form__row--tags-cover {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
 		}
 	}
 </style>
 
-<script is:inline>
-	const initDocumentToast = () => {
-		const source = document.querySelector("[data-toast-source]");
+<script>
+	import { marked } from "marked";
+
+	marked.use({
+		gfm: true,
+		breaks: true,
+	});
+
+	const initCoverPreview = () => {
+		const input = document.getElementById("document-cover-image");
+		const img = document.getElementById("document-cover-preview-img");
+		const emptyHint = document.getElementById(
+			"document-cover-preview-empty",
+		);
+		const fallback = document.getElementById(
+			"document-cover-preview-fallback",
+		);
 		if (
-			!(source instanceof HTMLElement) ||
-			source.dataset.toastConsumed === "true"
+			!(input instanceof HTMLInputElement) ||
+			!(img instanceof HTMLImageElement) ||
+			!(fallback instanceof HTMLElement)
 		) {
 			return;
 		}
+		if (input.dataset.coverPreviewReady === "true") {
+			return;
+		}
+		input.dataset.coverPreviewReady = "true";
 
-		source.dataset.toastConsumed = "true";
-		const toast = document.createElement("div");
-		toast.className = "document-toast";
-		toast.dataset.variant = source.dataset.toastVariant || "success";
-		toast.innerHTML = `
-			<div class="document-toast__title">${source.dataset.toastTitle || "提示"}</div>
-			<div class="document-toast__message">${source.textContent?.trim() || ""}</div>
-		`;
-		document.body.appendChild(toast);
+		const setPopoverVisible = (showImg: boolean) => {
+			img.classList.toggle("hidden", !showImg);
+			if (emptyHint instanceof HTMLElement) {
+				emptyHint.classList.toggle("hidden", showImg);
+			}
+		};
 
-		const duration = Number(source.dataset.toastDuration || "3200");
-		window.setTimeout(
-			() => {
+		const apply = () => {
+			fallback.textContent = "";
+			fallback.classList.add("hidden");
+			const raw = input.value.trim();
+			if (!raw) {
+				img.removeAttribute("src");
+				setPopoverVisible(false);
+				return;
+			}
+
+			const ok =
+				/^https?:\/\//i.test(raw) ||
+				raw.startsWith("/") ||
+				raw.startsWith("data:image/");
+			if (!ok) {
+				fallback.textContent =
+					"请使用 http(s) 完整链接、以 / 开头的站内绝对路径或 data: 图片；其它相对路径无法在此预览。";
+				fallback.classList.remove("hidden");
+				img.removeAttribute("src");
+				setPopoverVisible(false);
+				return;
+			}
+
+			setPopoverVisible(true);
+			img.onload = () => {
+				fallback.classList.add("hidden");
+				setPopoverVisible(true);
+			};
+			img.onerror = () => {
+				fallback.textContent =
+					"无法加载该图片，请确认地址可在浏览器中直接打开（公网可访问或本站已部署资源）。";
+				fallback.classList.remove("hidden");
+				img.removeAttribute("src");
+				setPopoverVisible(false);
+			};
+			img.src = raw;
+		};
+
+		input.addEventListener("input", apply);
+		apply();
+	};
+
+	const initMarkdownEditor = () => {
+		const root = document.querySelector("[data-doc-md-panels]");
+		const tabs = document.querySelector("[data-doc-md-tabs]");
+		const source = document.querySelector("[data-doc-md-source]");
+		const preview = document.querySelector("[data-doc-md-preview]");
+		if (
+			!(root instanceof HTMLElement) ||
+			!(tabs instanceof HTMLElement) ||
+			!(source instanceof HTMLTextAreaElement) ||
+			!(preview instanceof HTMLElement)
+		) {
+			return;
+		}
+		if (root.dataset.mdEditorReady === "true") {
+			return;
+		}
+		root.dataset.mdEditorReady = "true";
+
+		let debounce = 0;
+
+		const render = () => {
+			const text = source.value;
+			if (!text.trim()) {
+				preview.innerHTML =
+					'<p class="text-gray-500 text-sm m-0">输入 Markdown 后在此查看渲染</p>';
+				return;
+			}
+			preview.innerHTML = String(marked.parse(text));
+		};
+
+		const setMode = (mode: "edit" | "preview" | "split") => {
+			root.classList.remove(
+				"doc-md-panels--edit",
+				"doc-md-panels--preview",
+				"doc-md-panels--split",
+			);
+			root.classList.add(`doc-md-panels--${mode}`);
+			tabs.querySelectorAll("[data-doc-md-mode]").forEach((btn) => {
+				if (btn instanceof HTMLElement) {
+					btn.classList.toggle(
+						"is-active",
+						btn.dataset.docMdMode === mode,
+					);
+				}
+			});
+			if (mode === "preview" || mode === "split") {
+				render();
+			}
+		};
+
+		tabs.addEventListener("click", (ev) => {
+			const t = ev.target;
+			if (!(t instanceof Node)) {
+				return;
+			}
+			const btn =
+				t instanceof Element ? t.closest("[data-doc-md-mode]") : null;
+			if (!(btn instanceof HTMLElement)) {
+				return;
+			}
+			const mode = btn.dataset.docMdMode;
+			if (mode === "edit" || mode === "preview" || mode === "split") {
+				setMode(mode);
+			}
+		});
+
+		source.addEventListener("input", () => {
+			window.clearTimeout(debounce);
+			debounce = window.setTimeout(() => {
+				if (
+					root.classList.contains("doc-md-panels--preview") ||
+					root.classList.contains("doc-md-panels--split")
+				) {
+					render();
+				}
+			}, 140);
+		});
+
+		if (window.matchMedia("(min-width: 640px)").matches) {
+			setMode("split");
+		} else {
+			setMode("edit");
+		}
+		render();
+	};
+
+	function initDocumentToast() {
+		const ensureStack = () => {
+			const existing = document.getElementById("notification-stack");
+			if (existing instanceof HTMLElement) {
+				return existing;
+			}
+
+			const stack = document.createElement("div");
+			stack.id = "notification-stack";
+			stack.className = "notification-stack";
+			stack.setAttribute("aria-live", "polite");
+			stack.setAttribute("aria-atomic", "false");
+			document.body.appendChild(stack);
+			return stack;
+		};
+
+		const removeToast = (toast: HTMLElement): void => {
+			if (!(toast instanceof HTMLElement) || toast.dataset.leaving === "true") {
+				return;
+			}
+
+			toast.dataset.leaving = "true";
+			toast.classList.remove("is-entering");
+			toast.classList.add("is-leaving");
+			window.setTimeout(() => {
 				toast.remove();
-			},
-			Number.isFinite(duration) ? duration : 3200,
-		);
+			}, 300);
+		};
+
+		interface ToastOptions {
+			message: string;
+			variant?: "success" | "error";
+			title?: string;
+			duration?: number;
+		}
+
+		const showToast = ({
+			message,
+			variant = "success",
+			title,
+			duration = 3000,
+		}: ToastOptions): HTMLElement | undefined => {
+			if (!message) {
+				return;
+			}
+
+			const stack = ensureStack();
+			const toast = document.createElement("section");
+			const resolvedTitle =
+				title ?? (variant === "error" ? "操作失败" : "操作成功");
+			const icon =
+				variant === "error"
+					? '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1" fill="currentColor"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>'
+					: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7L9 18l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+			toast.className = `notification notification--${variant} is-entering`;
+			toast.setAttribute("role", "status");
+			toast.style.setProperty("--toast-duration", `${duration}ms`);
+			toast.innerHTML = `
+				<div class="notification__glow" aria-hidden="true"></div>
+				<div class="notification__row">
+					<div class="notification__icon" aria-hidden="true">${icon}</div>
+					<div class="notification__content">
+						<div class="notification__title">${resolvedTitle}</div>
+						<div class="notification__message"></div>
+					</div>
+					<button type="button" class="notification__close" aria-label="关闭通知">×</button>
+				</div>
+				<div class="notification__progress" aria-hidden="true"></div>
+			`;
+			const messageNode = toast.querySelector(".notification__message");
+			if (messageNode instanceof HTMLElement) {
+				messageNode.textContent = message;
+			}
+
+			const closeButton = toast.querySelector(".notification__close");
+			if (closeButton instanceof HTMLButtonElement) {
+				closeButton.addEventListener("click", () => removeToast(toast));
+			}
+
+			stack.appendChild(toast);
+			window.setTimeout(() => removeToast(toast), duration);
+			return toast;
+		};
+
+		if (typeof window !== "undefined") {
+			(
+				window as unknown as { showDocumentToast: typeof showToast }
+			).showDocumentToast = showToast;
+		}
+
+		document.querySelectorAll("[data-toast-source]").forEach((source) => {
+			if (
+				!(source instanceof HTMLElement) ||
+				source.dataset.toastConsumed === "true"
+			) {
+				return;
+			}
+
+			source.dataset.toastConsumed = "true";
+			showToast({
+				message: source.textContent?.trim() ?? "",
+				variant: source.dataset.toastVariant === "error" ? "error" : "success",
+				title: source.dataset.toastTitle ?? undefined,
+				duration: Number(source.dataset.toastDuration ?? "3000") || 3000,
+			});
+		});
+
+		const currentUrl = new URL(window.location.href);
+		const transientParams = [
+			"status",
+			"code",
+			"edit",
+			"create",
+			"highlight",
+		];
+		let didUpdateUrl = false;
+		transientParams.forEach((key) => {
+			if (currentUrl.searchParams.has(key)) {
+				currentUrl.searchParams.delete(key);
+				didUpdateUrl = true;
+			}
+		});
+		if (didUpdateUrl) {
+			window.history.replaceState(
+				{},
+				"",
+				`${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+			);
+		}
+	}
+
+	const moveOverlayToBody = (element: HTMLElement): void => {
+		if (element.parentElement !== document.body) {
+			document.body.appendChild(element);
+		}
 	};
 
 	const initDocumentModal = () => {
 		const modal = document.getElementById("document-modal");
-		if (
-			!(modal instanceof HTMLElement) ||
-			modal.dataset.modalReady === "true"
-		) {
+		if (!(modal instanceof HTMLElement)) {
+			return;
+		}
+		moveOverlayToBody(modal);
+		if (modal.dataset.modalReady === "true") {
 			return;
 		}
 
 		modal.dataset.modalReady = "true";
+		if (modal.dataset.open === "true") {
+			document.body.style.overflow = "hidden";
+		}
 		const closeUrl = modal.dataset.closeUrl || "/admin/documents";
-		const closeButtons = modal.querySelectorAll("[data-close-document-modal]");
+		const closeButtons = modal.querySelectorAll(
+			"[data-close-document-modal]",
+		);
 
 		const closeModal = () => {
+			document.body.style.overflow = "";
 			window.location.href = closeUrl;
 		};
 
@@ -936,33 +2023,82 @@ const closeModalUrl = buildAdminLink({
 		if (
 			!(modal instanceof HTMLElement) ||
 			!(slugInput instanceof HTMLInputElement) ||
-			!(titleElement instanceof HTMLElement) ||
-			modal.dataset.modalReady === "true"
+			!(titleElement instanceof HTMLElement)
 		) {
+			return;
+		}
+		moveOverlayToBody(modal);
+		if (modal.dataset.modalReady === "true") {
 			return;
 		}
 
 		modal.dataset.modalReady = "true";
 
+		const syncBodyOverflow = () => {
+			const editorModal = document.getElementById("document-modal");
+			document.body.style.overflow =
+				editorModal instanceof HTMLElement &&
+				editorModal.dataset.open === "true" &&
+				!editorModal.classList.contains("hidden")
+					? "hidden"
+					: "";
+		};
+
 		const closeModal = () => {
 			modal.classList.add("hidden");
 			modal.classList.remove("flex");
+			syncBodyOverflow();
 		};
 
 		document.addEventListener("click", (event) => {
-			const openButton = event.target.closest("[data-open-delete-modal]");
+			const t = event.target;
+			if (!(t instanceof Element)) {
+				return;
+			}
+			const openButton = t.closest("[data-open-delete-modal]");
 			if (openButton instanceof HTMLElement) {
 				slugInput.value = openButton.dataset.documentSlug || "";
 				titleElement.textContent = `《${openButton.dataset.documentTitle || "未命名文章"}》`;
 				modal.classList.remove("hidden");
 				modal.classList.add("flex");
+				document.body.style.overflow = "hidden";
 				return;
 			}
 
-			const closeButton = event.target.closest("[data-close-delete-modal]");
-			if (closeButton) {
+			if (t.closest("[data-close-delete-modal]")) {
 				closeModal();
 			}
+		});
+	};
+
+	const syncModalSelect = (kind: "category" | "draft", value: string) => {
+		const root = document.querySelector(`[data-modal-select="${kind}"]`);
+		if (!root) {
+			return;
+		}
+		const input = root.querySelector("[data-select-input]");
+		const label = root.querySelector("[data-select-label]");
+		const options = root.querySelectorAll("[data-select-option]");
+		if (
+			!(input instanceof HTMLInputElement) ||
+			!(label instanceof HTMLElement)
+		) {
+			return;
+		}
+		input.value = value;
+		const active = Array.from(options).find(
+			(opt) => opt.getAttribute("data-value") === value,
+		);
+		const nextLabel =
+			active?.getAttribute("data-label") ??
+			(kind === "draft" ? (value === "true" ? "草稿" : "已发布") : value);
+		label.textContent = nextLabel;
+		label.classList.add("is-selected");
+		options.forEach((opt) => {
+			opt.classList.toggle(
+				"is-active",
+				opt.getAttribute("data-value") === value,
+			);
 		});
 	};
 
@@ -972,11 +2108,11 @@ const closeModalUrl = buildAdminLink({
 		const feedback = document.getElementById("document-import-feedback");
 		const titleInput = document.getElementById("document-title");
 		const slugInput = document.getElementById("document-slug");
-		const descriptionInput = document.getElementById("document-description");
+		const descriptionInput = document.getElementById(
+			"document-description",
+		);
 		const categoryInput = document.getElementById("document-category");
 		const tagsInput = document.getElementById("document-tags");
-		const publishedAtInput = document.getElementById("document-published-at");
-		const updatedAtInput = document.getElementById("document-updated-at");
 		const coverImageInput = document.getElementById("document-cover-image");
 		const draftInput = document.getElementById("document-draft");
 		const isPinnedInput = document.getElementById("document-is-pinned");
@@ -989,12 +2125,10 @@ const closeModalUrl = buildAdminLink({
 			!(titleInput instanceof HTMLInputElement) ||
 			!(slugInput instanceof HTMLInputElement) ||
 			!(descriptionInput instanceof HTMLTextAreaElement) ||
-			!(categoryInput instanceof HTMLSelectElement) ||
+			!(categoryInput instanceof HTMLInputElement) ||
 			!(tagsInput instanceof HTMLInputElement) ||
-			!(publishedAtInput instanceof HTMLInputElement) ||
-			!(updatedAtInput instanceof HTMLInputElement) ||
 			!(coverImageInput instanceof HTMLInputElement) ||
-			!(draftInput instanceof HTMLSelectElement) ||
+			!(draftInput instanceof HTMLInputElement) ||
 			!(isPinnedInput instanceof HTMLInputElement) ||
 			!(bodyInput instanceof HTMLTextAreaElement)
 		) {
@@ -1024,19 +2158,37 @@ const closeModalUrl = buildAdminLink({
 			slugTouched = slugInput.value.trim().length > 0;
 		});
 
-		const applyParsedData = (data) => {
+		interface ParsedDocumentPayload {
+			title?: string;
+			slug?: string;
+			description?: string;
+			category?: string;
+			tags?: string[];
+			coverImage?: string;
+			draft?: boolean;
+			isPinned?: boolean;
+			body?: string;
+		}
+
+		const applyParsedData = (data: ParsedDocumentPayload) => {
 			titleInput.value = data.title || "";
 			slugInput.value = data.slug || "";
 			descriptionInput.value = data.description || "";
 			categoryInput.value = data.category || "other";
-			tagsInput.value = Array.isArray(data.tags) ? data.tags.join(", ") : "";
-			publishedAtInput.value = (data.publishedAt || "").slice(0, 16);
-			updatedAtInput.value = (data.updatedAt || "").slice(0, 16);
+			tagsInput.value = Array.isArray(data.tags)
+				? data.tags.join(", ")
+				: "";
 			coverImageInput.value = data.coverImage || "";
 			draftInput.value = data.draft ? "true" : "false";
 			isPinnedInput.checked = Boolean(data.isPinned);
 			bodyInput.value = data.body || "";
 			slugTouched = false;
+			syncModalSelect("category", categoryInput.value);
+			syncModalSelect("draft", draftInput.value);
+			coverImageInput.dispatchEvent(
+				new Event("input", { bubbles: true }),
+			);
+			bodyInput.dispatchEvent(new Event("input", { bubbles: true }));
 		};
 
 		const parseMarkdownFile = async () => {
@@ -1065,7 +2217,8 @@ const closeModalUrl = buildAdminLink({
 				}
 
 				applyParsedData(payload.data);
-				feedback.textContent = "Markdown 已解析完成，字段已填充到表单中。";
+				feedback.textContent =
+					"Markdown 已解析完成，字段已填充到表单中。";
 				feedback.className = "mt-3 text-sm text-emerald-300";
 			} catch (error) {
 				feedback.textContent =
@@ -1084,12 +2237,274 @@ const closeModalUrl = buildAdminLink({
 		});
 	};
 
-	initDocumentToast();
-	initDocumentModal();
-	initDeleteModal();
-	initDocumentImport();
-	document.addEventListener("astro:page-load", initDocumentToast);
-	document.addEventListener("astro:page-load", initDocumentModal);
-	document.addEventListener("astro:page-load", initDeleteModal);
-	document.addEventListener("astro:page-load", initDocumentImport);
+	function initCustomSelects() {
+		document
+			.querySelectorAll("[data-custom-select-root]")
+			.forEach((root) => {
+				if (!(root instanceof HTMLElement)) {
+					return;
+				}
+
+				if (root.dataset.selectReady === "true") {
+					return;
+				}
+
+				const form = root.closest("form");
+				const details = root.querySelector("details");
+				const summary = root.querySelector("summary");
+				const input = root.querySelector("[data-select-input]");
+				const label = root.querySelector("[data-select-label]");
+				const options = root.querySelectorAll("[data-select-option]");
+
+				if (
+					!(form instanceof HTMLFormElement) ||
+					!(details instanceof HTMLDetailsElement) ||
+					!(summary instanceof HTMLElement) ||
+					!(input instanceof HTMLInputElement) ||
+					!(label instanceof HTMLElement) ||
+					options.length === 0
+				) {
+					return;
+				}
+
+				root.dataset.selectReady = "true";
+				let closeTimer: number | undefined;
+
+				root.addEventListener("mouseenter", () => {
+					if (closeTimer) {
+						clearTimeout(closeTimer);
+					}
+				});
+
+				root.addEventListener("mouseleave", () => {
+					closeTimer = window.setTimeout(() => {
+						details.removeAttribute("open");
+					}, 120);
+				});
+
+				summary.addEventListener("click", (event) => {
+					event.preventDefault();
+					if (closeTimer) {
+						clearTimeout(closeTimer);
+					}
+
+					if (details.hasAttribute("open")) {
+						details.removeAttribute("open");
+					} else {
+						document
+							.querySelectorAll(
+								"[data-custom-select-root] details[open]",
+							)
+							.forEach((item) => {
+								if (item !== details) {
+									item.removeAttribute("open");
+								}
+							});
+						details.setAttribute("open", "");
+					}
+				});
+
+				options.forEach((option) => {
+					option.addEventListener("click", () => {
+						const nextValue =
+							option.getAttribute("data-value") ?? "";
+						const nextLabel =
+							option.getAttribute("data-label") ??
+							option.textContent?.trim() ??
+							"";
+
+						input.value = nextValue;
+						label.textContent = nextLabel;
+						label.classList.toggle(
+							"is-selected",
+							Boolean(nextValue),
+						);
+						input.dispatchEvent(
+							new Event("change", { bubbles: true }),
+						);
+
+						options.forEach((item) =>
+							item.classList.remove("is-active"),
+						);
+						option.classList.add("is-active");
+						details.removeAttribute("open");
+						if (root.dataset.selectSubmitOnChange === "true") {
+							form.requestSubmit();
+						}
+					});
+				});
+			});
+	}
+
+	function initAdminDocumentsPartialRefresh() {
+		const form = document.querySelector(
+			"[data-admin-documents-filter-form]",
+		);
+		const results = document.querySelector(
+			"[data-admin-documents-results]",
+		);
+
+		if (
+			!(form instanceof HTMLFormElement) ||
+			!(results instanceof HTMLElement) ||
+			form.dataset.partialReady === "true"
+		) {
+			return;
+		}
+
+		form.dataset.partialReady = "true";
+
+		const buildUrlFromForm = (): URL => {
+			const url = new URL(
+				form.getAttribute("action") || window.location.pathname,
+				window.location.origin,
+			);
+			const formData = new FormData(form);
+
+			for (const [key, value] of formData.entries()) {
+				const normalizedValue = String(value).trim();
+				if (normalizedValue) {
+					url.searchParams.set(key, normalizedValue);
+				}
+			}
+
+			return url;
+		};
+
+		const syncFormWithUrl = (url: URL): void => {
+			const keywordInput = form.querySelector('input[name="q"]');
+			if (keywordInput instanceof HTMLInputElement) {
+				keywordInput.value = url.searchParams.get("q") ?? "";
+			}
+
+			form.querySelectorAll("[data-custom-select-root]").forEach(
+				(root) => {
+					const input = root.querySelector("[data-select-input]");
+					const label = root.querySelector("[data-select-label]");
+					const options = root.querySelectorAll(
+						"[data-select-option]",
+					);
+
+					if (
+						!(input instanceof HTMLInputElement) ||
+						!(label instanceof HTMLElement)
+					) {
+						return;
+					}
+
+					const nextValue = url.searchParams.get(input.name) ?? "";
+					input.value = nextValue;
+
+					const activeOption = Array.from(options).find(
+						(option) =>
+							option.getAttribute("data-value") === nextValue,
+					);
+					label.textContent =
+						activeOption?.getAttribute("data-label") ??
+						label.dataset.placeholder ??
+						"";
+					label.classList.toggle("is-selected", Boolean(nextValue));
+
+					options.forEach((option) => {
+						option.classList.toggle(
+							"is-active",
+							option.getAttribute("data-value") === nextValue,
+						);
+					});
+				},
+			);
+		};
+
+		const refreshResults = async (
+			url: URL | string,
+			replaceHistory = false,
+		): Promise<void> => {
+			results.setAttribute("aria-busy", "true");
+			results.style.opacity = "0.55";
+
+			try {
+				const response = await fetch(url, {
+					headers: {
+						"X-Requested-With": "admin-documents-partial",
+					},
+				});
+
+				if (!response.ok) {
+					window.location.href =
+						typeof url === "string" ? url : url.toString();
+					return;
+				}
+
+				const html = await response.text();
+				const doc = new DOMParser().parseFromString(html, "text/html");
+				const nextResults = doc.querySelector(
+					"[data-admin-documents-results]",
+				);
+
+				if (!(nextResults instanceof HTMLElement)) {
+					window.location.href =
+						typeof url === "string" ? url : url.toString();
+					return;
+				}
+
+				results.innerHTML = nextResults.innerHTML;
+				if (replaceHistory) {
+					window.history.replaceState({}, "", url);
+				} else {
+					window.history.pushState({}, "", url);
+				}
+			} finally {
+				results.style.opacity = "";
+				results.removeAttribute("aria-busy");
+			}
+		};
+
+		form.addEventListener("submit", async (event: SubmitEvent) => {
+			event.preventDefault();
+			await refreshResults(buildUrlFromForm().toString());
+		});
+
+		form.addEventListener("click", async (event: MouseEvent) => {
+			const target = event.target as Element;
+			if (!(target instanceof Element)) {
+				return;
+			}
+
+			const clearLink = target.closest("[data-admin-documents-clear]");
+			if (!(clearLink instanceof HTMLAnchorElement)) {
+				return;
+			}
+
+			event.preventDefault();
+			const url = new URL(clearLink.href, window.location.origin);
+			syncFormWithUrl(url);
+			await refreshResults(url.toString());
+		});
+		/* 编辑/新建 必须整页导航才能渲染并打开 #document-modal；局部只替换
+		 * [data-admin-documents-results] 时弹窗不会出现在响应片段里。 */
+	}
+
+	const runDocumentPageInit = () => {
+		if (window.location.pathname !== "/admin/documents") {
+			return;
+		}
+		initDocumentToast();
+		initDocumentModal();
+		initDeleteModal();
+		initCoverPreview();
+		initMarkdownEditor();
+		initDocumentImport();
+		initCustomSelects();
+		initAdminDocumentsPartialRefresh();
+	};
+
+	runDocumentPageInit();
+
+	const docsWindow = window as Window & {
+		__adminDocumentsPageLoadBound?: boolean;
+	};
+	if (!docsWindow.__adminDocumentsPageLoadBound) {
+		document.addEventListener("astro:page-load", runDocumentPageInit);
+		docsWindow.__adminDocumentsPageLoadBound = true;
+	}
 </script>

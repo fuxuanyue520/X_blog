@@ -23,6 +23,12 @@ function withLoginError(target: string, error: string) {
 	return `${url.pathname}${url.search}`;
 }
 
+function withLoginSuccess(target: string) {
+	const url = new URL(target, "http://localhost");
+	url.searchParams.set("auth", "login");
+	return `${url.pathname}${url.search}`;
+}
+
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	const formData = await request.formData();
 	const username = String(formData.get("username") ?? "").trim();
@@ -42,7 +48,9 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	const session = await createAdminSession(admin.id);
 	setAdminSessionCookie(cookies, session.token, session.expiresAt);
 
-	return redirect(redirectTo === "/admin/login" ? "/admin" : redirectTo);
+	const destination =
+		redirectTo === "/admin/login" ? "/admin" : redirectTo;
+	return redirect(withLoginSuccess(destination));
 };
 
 export const GET: APIRoute = async ({ redirect }) => {

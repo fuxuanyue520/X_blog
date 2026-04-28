@@ -15,6 +15,12 @@ function normalizeRedirectTarget(value: FormDataEntryValue | null) {
 	return target;
 }
 
+function withLogoutSuccess(target: string) {
+	const url = new URL(target, "http://localhost");
+	url.searchParams.set("auth", "logout");
+	return `${url.pathname}${url.search}`;
+}
+
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	const token = cookies.get(ADMIN_SESSION_COOKIE_NAME)?.value;
 	const formData = await request.formData();
@@ -23,7 +29,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	await destroyAdminSession(token);
 	clearAdminSessionCookie(cookies);
 
-	return redirect(redirectTo);
+	return redirect(withLogoutSuccess(redirectTo));
 };
 
 export const GET: APIRoute = async ({ redirect }) => {

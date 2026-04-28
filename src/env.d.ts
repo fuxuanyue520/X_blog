@@ -2,10 +2,13 @@
 /// <reference types="astro/client" />
 
 interface ImportMetaEnv {
-	readonly LIBSQL_URL?: string;
-	readonly LIBSQL_AUTH_TOKEN?: string;
+	readonly MYSQL_HOST?: string;
+	readonly MYSQL_PORT?: string;
+	readonly MYSQL_USER?: string;
+	readonly MYSQL_PASSWORD?: string;
+	readonly MYSQL_DATABASE?: string;
 }
 
 interface Window {
-  _wallpaperListenerAttached?: boolean;
+	_wallpaperListenerAttached?: boolean;
 }

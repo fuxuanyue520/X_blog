@@ -1,9 +1,15 @@
 import matter from "gray-matter";
 import { Marked, type Tokens } from "marked";
 import { getDb } from "@/lib/db";
+import { getCache, setCache, invalidateCache } from "@/lib/cache";
 import type { Article, ArticleCategory, ArticleHeading } from "@/types/article";
 
-export const ARTICLE_CATEGORIES = ["tech", "essay", "project", "other"] as const;
+export const ARTICLE_CATEGORIES = [
+	"tech",
+	"essay",
+	"project",
+	"other",
+] as const;
 
 export interface ArticleAdminEntry {
 	id: string;
@@ -34,8 +40,6 @@ export interface SaveArticleInput {
 	description: string;
 	category: string;
 	tags?: string[];
-	publishedAt: string;
-	updatedAt?: string;
 	coverImage?: string;
 	isPinned?: boolean;
 	draft?: boolean;
@@ -83,12 +87,14 @@ function padDatePart(value: number) {
 }
 
 function toLocalDateTimeString(date: Date) {
-	return [
-		date.getFullYear(),
-		padDatePart(date.getMonth() + 1),
-		padDatePart(date.getDate()),
-	].join("-") +
-		`T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
+	return (
+		[
+			date.getFullYear(),
+			padDatePart(date.getMonth() + 1),
+			padDatePart(date.getDate()),
+		].join("-") +
+		`T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`
+	);
 }
 
 function parseDateTimeValue(value: string) {
@@ -144,14 +150,16 @@ function toBoolean(value: unknown) {
 		return value === 1;
 	}
 
-	return String(value ?? "").trim().toLowerCase() === "true";
+	return (
+		String(value ?? "")
+			.trim()
+			.toLowerCase() === "true"
+	);
 }
 
 function normalizeTags(value: unknown) {
 	if (Array.isArray(value)) {
-		return value
-			.map((item) => String(item ?? "").trim())
-			.filter(Boolean);
+		return value.map((item) => String(item ?? "").trim()).filter(Boolean);
 	}
 
 	return String(value ?? "")
@@ -190,7 +198,8 @@ function buildFallbackSlug() {
 }
 
 export function normalizeArticleSlug(value: string, fallbackSource = "") {
-	const normalized = normalizeSlugCandidate(value) || normalizeSlugCandidate(fallbackSource);
+	const normalized =
+		normalizeSlugCandidate(value) || normalizeSlugCandidate(fallbackSource);
 	return normalized || buildFallbackSlug();
 }
 
@@ -221,9 +230,12 @@ function assertValidPublishedAt(value: string) {
 }
 
 function mapArticleRow(row: ArticleRow): ArticleAdminEntry {
-	const body = String(row.body ?? "").replace(/^\uFEFF/, "").trim();
+	const body = String(row.body ?? "")
+		.replace(/^\uFEFF/, "")
+		.trim();
 	const publishedAt =
-		normalizeDateTimeValue(row.published_at) || new Date().toISOString().slice(0, 19);
+		normalizeDateTimeValue(row.published_at) ||
+		new Date().toISOString().slice(0, 19);
 	const updatedAt = normalizeDateTimeValue(row.article_updated_at) || undefined;
 	const category = isValidCategory(String(row.category ?? "other"))
 		? (String(row.category) as ArticleCategory)
@@ -271,29 +283,65 @@ function compareArticles(left: ArticleAdminEntry, right: ArticleAdminEntry) {
 		return left.isPinned ? -1 : 1;
 	}
 
-	return new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime();
+	return (
+		new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime()
+	);
 }
 
-async function fetchAllAdminArticles() {
-	const db = await getDb();
-	const result = await db.execute(`
-		SELECT
-			id,
-			slug,
-			title,
-			description,
-			category,
-			tags,
-			published_at,
-			article_updated_at,
-			cover_image,
-			is_pinned,
-			draft,
-			body
-		FROM blog_articles
-	`);
+const ARTICLES_CACHE_KEY = "admin-articles";
+let fetchAllAdminArticlesPromise: Promise<ArticleAdminEntry[]> | null = null;
 
-	return result.rows.map((row) => mapArticleRow(row as ArticleRow));
+async function fetchAllAdminArticles() {
+	const startTime = Date.now();
+	const cached = getCache<ArticleAdminEntry[]>(ARTICLES_CACHE_KEY);
+	if (cached) {
+		console.log(`[Articles] 缓存命中 (${Date.now() - startTime}ms)`);
+		return cached;
+	}
+
+	if (fetchAllAdminArticlesPromise) {
+		return fetchAllAdminArticlesPromise;
+	}
+
+	fetchAllAdminArticlesPromise = (async () => {
+		console.log(`[Articles] 缓存未命中，查询数据库...`);
+		const db = await getDb();
+		const result = await db.execute(`
+			SELECT
+				id,
+				slug,
+				title,
+				description,
+				category,
+				tags,
+				published_at,
+				article_updated_at,
+				cover_image,
+				is_pinned,
+				draft,
+				body
+			FROM blog_articles
+		`);
+
+		const articles = result.rows.map((row) =>
+			mapArticleRow(row as unknown as ArticleRow),
+		);
+		setCache(ARTICLES_CACHE_KEY, articles);
+		console.log(
+			`[Articles] 查询完成，共 ${articles.length} 条记录 (${Date.now() - startTime}ms)`,
+		);
+		return articles;
+	})();
+
+	try {
+		return await fetchAllAdminArticlesPromise;
+	} finally {
+		fetchAllAdminArticlesPromise = null;
+	}
+}
+
+export function invalidateArticlesCache() {
+	invalidateCache(ARTICLES_CACHE_KEY);
 }
 
 export async function listAdminArticles(filters: ArticleListFilters = {}) {
@@ -335,31 +383,12 @@ export async function listAdminArticles(filters: ArticleListFilters = {}) {
 
 export async function getAdminArticleBySlug(slug: string) {
 	const normalizedSlug = normalizeArticleSlug(slug);
-	const db = await getDb();
-	const result = await db.execute({
-		sql: `
-			SELECT
-				id,
-				slug,
-				title,
-				description,
-				category,
-				tags,
-				published_at,
-				article_updated_at,
-				cover_image,
-				is_pinned,
-				draft,
-				body
-			FROM blog_articles
-			WHERE slug = ?
-			LIMIT 1
-		`,
-		args: [normalizedSlug],
-	});
-
-	const row = result.rows[0];
-	return row ? mapArticleRow(row as ArticleRow) : null;
+	const articles = await fetchAllAdminArticles();
+	return (
+		articles.find(
+			(article) => normalizeArticleSlug(article.slug) === normalizedSlug,
+		) ?? null
+	);
 }
 
 export async function listPublishedArticles() {
@@ -377,11 +406,15 @@ export async function getPublishedArticleBySlug(slug: string) {
 	return toPublicArticle(article);
 }
 
-export async function paginatePublishedArticles(page: number, pageSize: number) {
+export async function paginatePublishedArticles(
+	page: number,
+	pageSize: number,
+) {
 	const articles = await listPublishedArticles();
 	const total = articles.length;
 	const lastPage = Math.max(1, Math.ceil(total / pageSize));
-	const currentPage = Number.isFinite(page) && page > 0 ? Math.min(page, lastPage) : 1;
+	const currentPage =
+		Number.isFinite(page) && page > 0 ? Math.min(page, lastPage) : 1;
 	const start = (currentPage - 1) * pageSize;
 
 	return {
@@ -394,12 +427,13 @@ export async function paginatePublishedArticles(page: number, pageSize: number) 
 
 export async function saveArticle(input: SaveArticleInput) {
 	const db = await getDb();
-	const currentSlug = input.currentSlug ? normalizeArticleSlug(input.currentSlug) : undefined;
+	const currentSlug = input.currentSlug
+		? normalizeArticleSlug(input.currentSlug)
+		: undefined;
 	const nextSlug = normalizeArticleSlug(input.slug ?? "", input.title);
 	const title = input.title.trim();
 	const description = input.description.trim();
 	const category = String(input.category ?? "").trim();
-	const publishedAt = normalizeDateTimeValue(input.publishedAt);
 	const coverImage = String(input.coverImage ?? "").trim();
 	const body = input.body.replace(/\r\n/g, "\n").trim();
 	const tags = (input.tags ?? []).map((tag) => tag.trim()).filter(Boolean);
@@ -413,14 +447,27 @@ export async function saveArticle(input: SaveArticleInput) {
 	}
 
 	assertValidCategory(category);
-	assertValidPublishedAt(publishedAt);
+
+	const nowStamp =
+		normalizeDateTimeValue(new Date().toISOString()) ||
+		new Date().toISOString().slice(0, 19);
+
+	let publishedAt: string;
+	let articleUpdatedAt: string;
 
 	if (currentSlug) {
 		const existing = await getAdminArticleBySlug(currentSlug);
 		if (!existing) {
 			throw new Error("invalid_document");
 		}
+		publishedAt = normalizeDateTimeValue(existing.publishedAt) || nowStamp;
+		articleUpdatedAt = nowStamp;
+	} else {
+		publishedAt = nowStamp;
+		articleUpdatedAt = nowStamp;
 	}
+
+	assertValidPublishedAt(publishedAt);
 
 	if (currentSlug !== nextSlug) {
 		const duplicate = await getAdminArticleBySlug(nextSlug);
@@ -430,9 +477,6 @@ export async function saveArticle(input: SaveArticleInput) {
 	}
 
 	const now = new Date().toISOString();
-	const articleUpdatedAt =
-		normalizeDateTimeValue(input.updatedAt) ||
-		(currentSlug ? new Date().toISOString().slice(0, 19) : "");
 	const storedTags = JSON.stringify(tags);
 
 	if (currentSlug) {
@@ -461,7 +505,7 @@ export async function saveArticle(input: SaveArticleInput) {
 				category,
 				storedTags,
 				publishedAt,
-				articleUpdatedAt || null,
+				articleUpdatedAt,
 				coverImage || null,
 				Boolean(input.isPinned) ? 1 : 0,
 				Boolean(input.draft) ? 1 : 0,
@@ -497,7 +541,7 @@ export async function saveArticle(input: SaveArticleInput) {
 				category,
 				storedTags,
 				publishedAt,
-				articleUpdatedAt || null,
+				articleUpdatedAt,
 				coverImage || null,
 				Boolean(input.isPinned) ? 1 : 0,
 				Boolean(input.draft) ? 1 : 0,
@@ -508,6 +552,7 @@ export async function saveArticle(input: SaveArticleInput) {
 		});
 	}
 
+	invalidateArticlesCache();
 	return nextSlug;
 }
 
@@ -524,22 +569,29 @@ export async function deleteArticleBySlug(slug: string) {
 		sql: "DELETE FROM blog_articles WHERE slug = ?",
 		args: [normalizedSlug],
 	});
+
+	invalidateArticlesCache();
 	return true;
 }
 
-export async function parseMarkdownImport(text: string, fileName = "post.md"): Promise<ParsedMarkdownImport> {
+export async function parseMarkdownImport(
+	text: string,
+	fileName = "post.md",
+): Promise<ParsedMarkdownImport> {
 	const parsed = matter(text);
 	const data = parsed.data as Record<string, unknown>;
 	const fallbackSlug = fileName.replace(/\.(md|markdown)$/i, "");
 	const title = String(data.title ?? "").trim() || fallbackSlug || "未命名文章";
 	const description =
-		String(data.description ?? "").trim() || buildExcerpt(parsed.content).replace(/\.\.\.$/, "");
+		String(data.description ?? "").trim() ||
+		buildExcerpt(parsed.content).replace(/\.\.\.$/, "");
 	const categoryCandidate = String(data.category ?? "other").trim();
 	const category = isValidCategory(categoryCandidate)
 		? categoryCandidate
 		: "other";
 	const publishedAt =
-		normalizeDateTimeValue(data.publishedAt) || new Date().toISOString().slice(0, 19);
+		normalizeDateTimeValue(data.publishedAt) ||
+		new Date().toISOString().slice(0, 19);
 	const updatedAt = normalizeDateTimeValue(data.updatedAt) || undefined;
 
 	return {
@@ -567,15 +619,16 @@ function createHeadingSlugger() {
 	const counts = new Map<string, number>();
 
 	return (text: string) => {
-		const base = text
-			.toLowerCase()
-			.normalize("NFKD")
-			.replace(/[\u0300-\u036f]/g, "")
-			.replace(/[^\p{Letter}\p{Number}\s-]/gu, " ")
-			.trim()
-			.replace(/\s+/g, "-")
-			.replace(/-+/g, "-")
-			.replace(/^-|-$/g, "") || "section";
+		const base =
+			text
+				.toLowerCase()
+				.normalize("NFKD")
+				.replace(/[\u0300-\u036f]/g, "")
+				.replace(/[^\p{Letter}\p{Number}\s-]/gu, " ")
+				.trim()
+				.replace(/\s+/g, "-")
+				.replace(/-+/g, "-")
+				.replace(/^-|-$/g, "") || "section";
 		const current = counts.get(base) ?? 0;
 		counts.set(base, current + 1);
 		return current === 0 ? base : `${base}-${current}`;

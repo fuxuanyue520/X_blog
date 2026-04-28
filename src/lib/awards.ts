@@ -3,9 +3,13 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { createCanvas } from "@napi-rs/canvas";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
+import {
+	getDocument,
+	GlobalWorkerOptions,
+} from "pdfjs-dist/legacy/build/pdf.mjs";
 import sharp from "sharp";
 import { getDb } from "@/lib/db";
+import { getCache, setCache, invalidateCache } from "@/lib/cache";
 
 export const AWARD_LEVELS = ["省级", "国家级", "世界级"] as const;
 export const HONOR_TYPES = ["奖项", "软著", "专利", "证书", "其他"] as const;
@@ -89,7 +93,9 @@ export interface PreparedImageBuffer {
 	storedSize: number;
 }
 
-const HONOR_TYPE_ORDER = new Map(HONOR_TYPES.map((type, index) => [type, index]));
+const HONOR_TYPE_ORDER = new Map(
+	HONOR_TYPES.map((type, index) => [type, index]),
+);
 const AWARD_LEVEL_ORDER = new Map([
 	["世界级", 0],
 	["国际级", 0],
@@ -121,7 +127,7 @@ function getAwardLevelSortValue(level: string) {
 	return 50;
 }
 
-function getAwardNameSortValue(awardName: string) {
+function getAwardNameSortValue(awardName: string): [number, number, string] {
 	const value = awardName.trim();
 
 	if (!value) {
@@ -133,7 +139,11 @@ function getAwardNameSortValue(awardName: string) {
 		[/(一等奖学金|一等奖候选|一等奖|亚军|银奖)/u, 1, 1],
 		[/(二等奖学金|二等奖候选|二等奖|季军|铜奖)/u, 1, 2],
 		[/(三等奖学金|三等奖候选|三等奖)/u, 1, 3],
-		[/(优秀奖|优胜奖|最佳组织奖|优秀组织奖|最佳人气奖|最佳创意奖|最佳表现奖|道德风尚奖)/u, 2, 0],
+		[
+			/(优秀奖|优胜奖|最佳组织奖|优秀组织奖|最佳人气奖|最佳创意奖|最佳表现奖|道德风尚奖)/u,
+			2,
+			0,
+		],
 		[/(入围奖|成功参赛奖|纪念奖)/u, 3, 0],
 	];
 
@@ -156,7 +166,9 @@ function getAwardNameSortValue(awardName: string) {
 		九: 9,
 		十: 10,
 	};
-	const rankingMatch = value.match(/^第(\d+)名$/u) ?? value.match(/^第([一二三四五六七八九十零]+)名$/u);
+	const rankingMatch =
+		value.match(/^第(\d+)名$/u) ??
+		value.match(/^第([一二三四五六七八九十零]+)名$/u);
 	if (rankingMatch?.[1]) {
 		const ranking =
 			Number(rankingMatch[1]) ||
@@ -170,7 +182,9 @@ function getAwardNameSortValue(awardName: string) {
 }
 
 export function compareAwards(left: AwardCertificate, right: AwardCertificate) {
-	const honorTypeDiff = getHonorTypeSortValue(left.honorType) - getHonorTypeSortValue(right.honorType);
+	const honorTypeDiff =
+		getHonorTypeSortValue(left.honorType) -
+		getHonorTypeSortValue(right.honorType);
 	if (honorTypeDiff !== 0) {
 		return honorTypeDiff;
 	}
@@ -180,21 +194,32 @@ export function compareAwards(left: AwardCertificate, right: AwardCertificate) {
 		return yearDiff;
 	}
 
-	const levelDiff = getAwardLevelSortValue(left.awardLevel) - getAwardLevelSortValue(right.awardLevel);
+	const levelDiff =
+		getAwardLevelSortValue(left.awardLevel) -
+		getAwardLevelSortValue(right.awardLevel);
 	if (levelDiff !== 0) {
 		return levelDiff;
 	}
 
-	const [leftBucket, leftRank, leftLabel] = getAwardNameSortValue(left.awardName);
-	const [rightBucket, rightRank, rightLabel] = getAwardNameSortValue(right.awardName);
+	const [leftBucket, leftRank, leftLabel] = getAwardNameSortValue(
+		left.awardName,
+	);
+	const [rightBucket, rightRank, rightLabel] = getAwardNameSortValue(
+		right.awardName,
+	);
 	if (leftBucket !== rightBucket) {
 		return leftBucket - rightBucket;
 	}
-	if (leftRank !== rightRank) {
-		return leftRank - rightRank;
+	const leftRankNum = leftRank ?? 999;
+	const rightRankNum = rightRank ?? 999;
+	if (leftRankNum !== rightRankNum) {
+		return leftRankNum - rightRankNum;
 	}
 
-	const awardNameDiff = leftLabel.localeCompare(rightLabel, "zh-CN");
+	const awardNameDiff = String(leftLabel).localeCompare(
+		String(rightLabel),
+		"zh-CN",
+	);
 	if (awardNameDiff !== 0) {
 		return awardNameDiff;
 	}
@@ -270,7 +295,8 @@ export function splitAwardTitle(title: string) {
 function normalizeAwardRow(row: Record<string, unknown>): AwardCertificate {
 	const id = toNumber(row.id);
 	const fallback = splitAwardTitle(String(row.title ?? ""));
-	const competitionName = String(row.competition_name ?? "").trim() || fallback.competitionName;
+	const competitionName =
+		String(row.competition_name ?? "").trim() || fallback.competitionName;
 	const awardName = String(row.award_name ?? "").trim() || fallback.awardName;
 
 	return {
@@ -290,7 +316,9 @@ function normalizeAwardRow(row: Record<string, unknown>): AwardCertificate {
 	};
 }
 
-function normalizeAwardImageRow(row: Record<string, unknown>): AwardImageRecord {
+function normalizeAwardImageRow(
+	row: Record<string, unknown>,
+): AwardImageRecord {
 	return {
 		id: toNumber(row.id),
 		title: String(row.title ?? ""),
@@ -306,7 +334,7 @@ function buildAwardFilterQuery(filters: AwardFilters = {}) {
 	if (filters.keyword) {
 		const keyword = `%${filters.keyword}%`;
 		conditions.push(
-			"(title LIKE ? OR honor_type LIKE ? OR competition_name LIKE ? OR award_name LIKE ? OR award_level LIKE ? OR CAST(award_year AS TEXT) LIKE ?)",
+			"(title LIKE ? OR honor_type LIKE ? OR competition_name LIKE ? OR award_name LIKE ? OR award_level LIKE ? OR CAST(award_year AS CHAR) LIKE ?)",
 		);
 		args.push(keyword, keyword, keyword, keyword, keyword, keyword);
 	}
@@ -316,7 +344,10 @@ function buildAwardFilterQuery(filters: AwardFilters = {}) {
 		args.push(filters.honorType);
 	}
 
-	if (typeof filters.awardYear === "number" && Number.isFinite(filters.awardYear)) {
+	if (
+		typeof filters.awardYear === "number" &&
+		Number.isFinite(filters.awardYear)
+	) {
 		conditions.push("award_year = ?");
 		args.push(filters.awardYear);
 	}
@@ -327,14 +358,30 @@ function buildAwardFilterQuery(filters: AwardFilters = {}) {
 	}
 
 	return {
-		whereClause: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "",
+		whereClause:
+			conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "",
 		args,
 	};
 }
 
-export async function listAwards(filters: AwardFilters = {}, options: AwardListOptions = {}) {
+function hasActiveAwardFilters(filters: AwardFilters = {}) {
+	return Boolean(
+		filters.keyword ||
+		filters.honorType ||
+		filters.awardYear ||
+		filters.awardLevel,
+	);
+}
+
+const ALL_AWARDS_CACHE_KEY = "admin-awards-all";
+
+async function fetchAllAwardsCached() {
+	const cached = getCache<AwardCertificate[]>(ALL_AWARDS_CACHE_KEY);
+	if (cached) {
+		return cached;
+	}
+
 	const db = await getDb();
-	const { whereClause, args } = buildAwardFilterQuery(filters);
 	const result = await db.execute({
 		sql: `
 			SELECT
@@ -351,27 +398,88 @@ export async function listAwards(filters: AwardFilters = {}, options: AwardListO
 				created_at,
 				updated_at
 			FROM award_certificates
-			${whereClause}
 		`,
-		args,
 	});
 
 	const normalizedRows = result.rows
 		.map((row) => normalizeAwardRow(row as Record<string, unknown>))
 		.sort(compareAwards);
+	setCache(ALL_AWARDS_CACHE_KEY, normalizedRows);
+	return normalizedRows;
+}
+
+export async function listAwards(
+	filters: AwardFilters = {},
+	options: AwardListOptions = {},
+) {
+	let normalizedRows: AwardCertificate[];
+	const noFilter = !hasActiveAwardFilters(filters);
+	if (noFilter) {
+		normalizedRows = await fetchAllAwardsCached();
+	} else {
+		const db = await getDb();
+		const { whereClause, args } = buildAwardFilterQuery(filters);
+		const result = await db.execute({
+			sql: `
+				SELECT
+					id,
+					title,
+					honor_type,
+					competition_name,
+					award_name,
+					award_year,
+					award_level,
+					description,
+					image_name,
+					image_mime_type,
+					created_at,
+					updated_at
+				FROM award_certificates
+				${whereClause}
+			`,
+			args,
+		});
+		normalizedRows = result.rows
+			.map((row) => normalizeAwardRow(row as Record<string, unknown>))
+			.sort(compareAwards);
+	}
+
 	const start =
-		typeof options.offset === "number" && Number.isFinite(options.offset) && options.offset > 0
+		typeof options.offset === "number" &&
+		Number.isFinite(options.offset) &&
+		options.offset > 0
 			? Math.floor(options.offset)
 			: 0;
 	const end =
-		typeof options.limit === "number" && Number.isFinite(options.limit) && options.limit > 0
+		typeof options.limit === "number" &&
+		Number.isFinite(options.limit) &&
+		options.limit > 0
 			? start + Math.floor(options.limit)
 			: undefined;
 
 	return normalizedRows.slice(start, end);
 }
 
+const FILTER_OPTIONS_CACHE_KEY = "award-filter-options";
+
 export async function listAwardFilterOptions() {
+	const startTime = Date.now();
+	const cached = getCache<{
+		types: string[];
+		years: number[];
+		levels: string[];
+	}>(FILTER_OPTIONS_CACHE_KEY);
+
+	if (cached) {
+		console.log(
+			`[Award Cache] HIT - 从缓存获取筛选选项 (${Date.now() - startTime}ms)`,
+		);
+		return cached;
+	}
+
+	console.log(
+		`[Award Cache] MISS - 从数据库查询筛选选项 (${Date.now() - startTime}ms)`,
+	);
 	const db = await getDb();
 	const [typeResult, yearResult, levelResult] = await Promise.all([
 		db.execute({
@@ -385,7 +493,7 @@ export async function listAwardFilterOptions() {
 		}),
 	]);
 
-	return {
+	const result = {
 		types: typeResult.rows
 			.map((row) => String(row.honor_type ?? ""))
 			.sort((left, right) => {
@@ -402,12 +510,25 @@ export async function listAwardFilterOptions() {
 				}
 				return left.localeCompare(right, "zh-CN");
 			}),
-		years: yearResult.rows.map((row) => toNumber(row.award_year)).filter((year) => Number.isFinite(year)),
+		years: yearResult.rows
+			.map((row) => toNumber(row.award_year))
+			.filter((year) => Number.isFinite(year)),
 		levels: levelResult.rows.map((row) => String(row.award_level ?? "")),
 	};
+
+	setCache(FILTER_OPTIONS_CACHE_KEY, result);
+	console.log(
+		`[Award Cache] SET - 已缓存筛选选项 (${Date.now() - startTime}ms)`,
+	);
+	return result;
+}
+
+export function invalidateFilterOptionsCache() {
+	invalidateCache(FILTER_OPTIONS_CACHE_KEY);
 }
 
 export async function getAwardById(id: number) {
+	const startTime = Date.now();
 	const db = await getDb();
 	const result = await db.execute({
 		sql: `
@@ -431,6 +552,7 @@ export async function getAwardById(id: number) {
 		`,
 		args: [id],
 	});
+	console.log(`[Awards] 查询荣誉详情 (${Date.now() - startTime}ms)`);
 	const row = result.rows[0];
 
 	if (!row) {
@@ -444,6 +566,7 @@ export async function getAwardById(id: number) {
 }
 
 export async function getAwardImageById(id: number) {
+	const startTime = Date.now();
 	const db = await getDb();
 	const result = await db.execute({
 		sql: `
@@ -454,6 +577,7 @@ export async function getAwardImageById(id: number) {
 		`,
 		args: [id],
 	});
+	console.log(`[Awards] 查询荣誉图片 (${Date.now() - startTime}ms)`);
 	const row = result.rows[0];
 
 	if (!row) {
@@ -502,6 +626,8 @@ export async function saveAward(input: SaveAwardInput) {
 			],
 		});
 
+		invalidateFilterOptionsCache();
+		invalidateCache(ALL_AWARDS_CACHE_KEY);
 		return input.id;
 	}
 
@@ -539,6 +665,8 @@ export async function saveAward(input: SaveAwardInput) {
 		],
 	});
 
+	invalidateFilterOptionsCache();
+	invalidateCache(ALL_AWARDS_CACHE_KEY);
 	return toNumber(result.lastInsertRowid);
 }
 
@@ -549,21 +677,29 @@ export async function deleteAwardById(id: number) {
 		sql: "DELETE FROM award_certificates WHERE id = ?",
 		args: [id],
 	});
+
+	invalidateFilterOptionsCache();
+	invalidateCache(ALL_AWARDS_CACHE_KEY);
 }
 
 export async function countAwards(filters: AwardFilters = {}) {
+	const startTime = Date.now();
 	const db = await getDb();
 	const { whereClause, args } = buildAwardFilterQuery(filters);
 	const result = await db.execute({
 		sql: `SELECT COUNT(*) AS total FROM award_certificates ${whereClause}`,
 		args,
 	});
+	console.log(
+		`[Awards] 查询荣誉数量：${result.rows[0]?.total ?? 0} (${Date.now() - startTime}ms)`,
+	);
 	return toNumber(result.rows[0]?.total ?? 0);
 }
 
 function buildStoredImageName(originalName: string, fallbackTitle: string) {
 	const rawName = (originalName || fallbackTitle || "award-image").trim();
-	const normalizedName = rawName.replace(/\.[^.]+$/, "").trim() || "award-image";
+	const normalizedName =
+		rawName.replace(/\.[^.]+$/, "").trim() || "award-image";
 	return `${normalizedName}.jpg`;
 }
 
@@ -606,6 +742,7 @@ async function renderPdfFirstPage(fileBuffer: Buffer) {
 			await page.render({
 				canvasContext: context as never,
 				viewport,
+				canvas: canvas as never,
 			}).promise;
 
 			page.cleanup();
@@ -620,22 +757,28 @@ async function renderPdfFirstPage(fileBuffer: Buffer) {
 	} catch (error) {
 		await loadingTask.destroy();
 		const message =
-			error instanceof Error && error.message
-				? error.message
-				: "未知错误";
+			error instanceof Error && error.message ? error.message : "未知错误";
 		throw new Error(`PDF 转图片失败：${message}`);
 	}
 }
 
 async function compressImageBuffer(inputBuffer: Buffer) {
-	const metadata = await sharp(inputBuffer, { limitInputPixels: false }).metadata();
-	const maxSide = Math.max(metadata.width ?? 0, metadata.height ?? 0, MAX_IMAGE_DIMENSION);
+	const metadata = await sharp(inputBuffer, {
+		limitInputPixels: false,
+	}).metadata();
+	const maxSide = Math.max(
+		metadata.width ?? 0,
+		metadata.height ?? 0,
+		MAX_IMAGE_DIMENSION,
+	);
 	let currentDimension = Math.min(maxSide, MAX_IMAGE_DIMENSION);
 	let smallestBuffer: Buffer | undefined;
 
 	while (currentDimension >= MIN_IMAGE_DIMENSION) {
 		for (const quality of JPEG_QUALITY_STEPS) {
-			const candidateBuffer = await sharp(inputBuffer, { limitInputPixels: false })
+			const candidateBuffer = await sharp(inputBuffer, {
+				limitInputPixels: false,
+			})
 				.rotate()
 				.flatten({ background: "#ffffff" })
 				.resize({
@@ -666,7 +809,9 @@ async function compressImageBuffer(inputBuffer: Buffer) {
 	return smallestBuffer ?? inputBuffer;
 }
 
-export async function prepareImageBuffer(file: File): Promise<PreparedImageBuffer> {
+export async function prepareImageBuffer(
+	file: File,
+): Promise<PreparedImageBuffer> {
 	const inputBuffer = Buffer.from(await file.arrayBuffer());
 	const normalizedInputBuffer = isPdfFile(file)
 		? await renderPdfFirstPage(inputBuffer)
@@ -681,7 +826,10 @@ export async function prepareImageBuffer(file: File): Promise<PreparedImageBuffe
 	};
 }
 
-export async function prepareAwardImageForStorage(file: File, fallbackTitle: string): Promise<PreparedAwardImage> {
+export async function prepareAwardImageForStorage(
+	file: File,
+	fallbackTitle: string,
+): Promise<PreparedAwardImage> {
 	const preparedImage = await prepareImageBuffer(file);
 
 	return {

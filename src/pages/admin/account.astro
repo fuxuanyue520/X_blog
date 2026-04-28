@@ -1,0 +1,104 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import AdminShell from "@/components/admin/AdminShell.astro";
+import AdminNotificationStyles from "@/components/admin/AdminNotificationStyles.astro";
+import { getAuthenticatedAdmin } from "@/lib/auth";
+import { Icon } from "astro-icon/components";
+
+export const prerender = false;
+
+const admin = await getAuthenticatedAdmin(Astro);
+
+if (!admin) {
+	return Astro.redirect("/?login=1");
+}
+---
+
+<BaseLayout title="账户设置" description="修改后台登录密码">
+	<AdminNotificationStyles />
+	<AdminShell activeSection="account">
+		<div class="mx-auto w-full max-w-md py-2">
+			<form
+				class="rounded-xl border border-white/[0.07] bg-dark-800/75 px-5 py-6 sm:px-6 sm:py-7"
+				data-account-password-form
+				novalidate
+				autocomplete="off">
+				<div
+					class="mb-6 border-b border-white/[0.06] pb-6 text-center sm:text-left">
+					<p
+						class="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">
+						登录身份
+					</p>
+					<p
+						class="mt-1.5 break-all font-mono text-xl font-semibold tracking-tight text-white sm:text-2xl">
+						{admin.username}
+					</p>
+				</div>
+
+				<div class="space-y-5">
+					<div>
+						<label
+							for="account-current-password"
+							class="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
+							当前密码
+						</label>
+						<input
+							id="account-current-password"
+							name="currentPassword"
+							type="password"
+							autocomplete="current-password"
+							placeholder="输入当前密码"
+							class="w-full rounded-lg border border-white/10 bg-dark-900/60 px-3.5 py-3 text-base text-white outline-none transition placeholder:text-gray-500 focus:border-primary-400/50 focus:ring-1 focus:ring-primary-400/30"
+						/>
+					</div>
+					<div>
+						<label
+							for="account-new-password"
+							class="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
+							新密码
+						</label>
+						<input
+							id="account-new-password"
+							name="newPassword"
+							type="password"
+							autocomplete="new-password"
+							placeholder="至少 8 位"
+							class="w-full rounded-lg border border-white/10 bg-dark-900/60 px-3.5 py-3 text-base text-white outline-none transition placeholder:text-gray-500 focus:border-primary-400/50 focus:ring-1 focus:ring-primary-400/30"
+						/>
+					</div>
+					<div>
+						<label
+							for="account-confirm-password"
+							class="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
+							确认新密码
+						</label>
+						<input
+							id="account-confirm-password"
+							name="confirmPassword"
+							type="password"
+							autocomplete="new-password"
+							placeholder="再次输入新密码"
+							class="w-full rounded-lg border border-white/10 bg-dark-900/60 px-3.5 py-3 text-base text-white outline-none transition placeholder:text-gray-500 focus:border-primary-400/50 focus:ring-1 focus:ring-primary-400/30"
+						/>
+					</div>
+				</div>
+
+				<div class="mt-6">
+					<button
+						type="submit"
+						class="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-lg bg-primary-500 px-4 py-3 text-base font-semibold text-white transition hover:bg-primary-600 active:brightness-95 disabled:cursor-not-allowed disabled:opacity-50">
+						<Icon name="ri:lock-password-line" class="text-lg" />
+						<span>修改密码</span>
+					</button>
+				</div>
+			</form>
+		</div>
+	</AdminShell>
+</BaseLayout>
+
+<script>
+	import { mountAccountChangePasswordForm } from "@/scripts/account-change-password";
+
+	mountAccountChangePasswordForm();
+	document.addEventListener("astro:page-load", mountAccountChangePasswordForm);
+</script>

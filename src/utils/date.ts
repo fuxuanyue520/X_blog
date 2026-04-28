@@ -9,7 +9,9 @@ export function formatDate(
 		typeof date === "string"
 			? (() => {
 					const parsed = parseISO(date);
-					return Number.isNaN(parsed.getTime()) ? new Date(date) : parsed;
+					return Number.isNaN(parsed.getTime())
+						? new Date(date)
+						: parsed;
 				})()
 			: date;
 	if (Number.isNaN(d.getTime())) {

@@ -1,9 +1,98 @@
 ---
 import { Icon } from "astro-icon/components";
 
+const authToastParam = Astro.url.searchParams.get("auth") ?? "";
+const pwdErrCode = Astro.url.searchParams.get("pwdErr") ?? "";
+
+const loginLogoutCopy: Record<string, { title: string; message: string }> = {
+	login: {
+		title: "登录成功",
+		message: "欢迎回来，已登录管理员账号。",
+	},
+	logout: {
+		title: "已退出登录",
+		message: "你已安全退出，可随时再次登录。",
+	},
+};
+
+const passwordErrCopy: Record<string, { title: string; message: string }> = {
+	session: {
+		title: "未登录",
+		message: "登录已失效，请重新登录后再修改密码。",
+	},
+	fields: {
+		title: "校验失败",
+		message: "请填写当前密码、新密码与确认密码。",
+	},
+	mismatch: {
+		title: "校验失败",
+		message: "两次输入的新密码不一致。",
+	},
+	short: {
+		title: "校验失败",
+		message: "新密码至少需要 8 位字符。",
+	},
+	long: {
+		title: "校验失败",
+		message: "新密码过长，请缩短后再试。",
+	},
+	same: {
+		title: "校验失败",
+		message: "新密码不能与当前密码相同。",
+	},
+	current: {
+		title: "密码错误",
+		message: "当前密码不正确。",
+	},
+	user: {
+		title: "修改失败",
+		message: "账户不存在或无法保存。",
+	},
+	credential: {
+		title: "修改失败",
+		message: "账户凭据异常，无法校验当前密码。",
+	},
+	server: {
+		title: "修改失败",
+		message: "服务器繁忙，请稍后重试。",
+	},
+};
+
+function resolveAuthToast():
+	| {
+			title: string;
+			message: string;
+			variant: "success" | "error";
+	  }
+	| null {
+	if (authToastParam === "login" || authToastParam === "logout") {
+		const copy = loginLogoutCopy[authToastParam];
+		return copy ? { ...copy, variant: "success" as const } : null;
+	}
+	if (authToastParam === "password_ok") {
+		return {
+			title: "修改成功",
+			message: "密码已更新，请使用新密码登录。",
+			variant: "success",
+		};
+	}
+	if (authToastParam === "password_err") {
+		const copy = passwordErrCopy[pwdErrCode] ?? {
+			title: "修改失败",
+			message: "请稍后重试。",
+		};
+		return { ...copy, variant: "error" as const };
+	}
+	return null;
+}
+
+const authToastResolved = resolveAuthToast();
+
 const currentUrl = new URL(Astro.url);
 currentUrl.searchParams.delete("login");
 currentUrl.searchParams.delete("error");
+currentUrl.searchParams.delete("auth");
+currentUrl.searchParams.delete("pwdErr");
 const currentPathWithSearch = `${currentUrl.pathname}${currentUrl.search}`;
 const logoutRedirectTo = Astro.url.pathname.startsWith("/admin")
 	? "/"
@@ -102,44 +191,47 @@ const shouldOpenLoginModal =
 		<div class="flex items-center gap-3">
 			<div class="hidden md:block">
 				<button
-					type="button"
-					class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300"
-					data-open-login-modal
-					data-auth-guest
-				>
-					<Icon name="ri:user-shared-line" class="text-lg" />
-					<span>登录</span>
-				</button>
+			type="button"
+			class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition-all hover:border-primary-400 hover:text-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+			data-open-login-modal
+			data-auth-guest
+			aria-label="打开登录弹窗"
+		>
+			<Icon name="ri:user-shared-line" class="text-lg" />
+			<span>登录</span>
+		</button>
 
-				<form
-					method="POST"
-					action="/api/admin/logout"
-					class="hidden"
-					data-auth-logout-desktop
-				>
-					<input type="hidden" name="redirectTo" value={logoutRedirectTo} />
-					<button
-						type="submit"
-						class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300"
-					>
-						<Icon name="ri:logout-box-r-line" class="text-lg" />
-						<span>退出</span>
-					</button>
-				</form>
+		<form
+			method="POST"
+			action="/api/admin/logout"
+			class="hidden"
+			data-auth-logout-desktop
+		>
+			<input type="hidden" name="redirectTo" value={logoutRedirectTo} />
+			<button
+				type="submit"
+				class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition-all hover:border-primary-400 hover:text-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+				aria-label="退出登录"
+			>
+				<Icon name="ri:logout-box-r-line" class="text-lg" />
+				<span>退出</span>
+			</button>
+		</form>
 			</div>
 
 			<button
-				id="mobile-menu-btn"
-				class="md:hidden text-gray-300 hover:text-primary-500 focus:outline-none p-1"
-				aria-label="打开菜单"
-			>
-				<Icon name="ri:menu-4-line" class="text-2xl" id="menu-icon-open" />
-				<Icon
-					name="ri:close-line"
-					class="text-2xl hidden"
-					id="menu-icon-close"
-				/>
-			</button>
+		id="mobile-menu-btn"
+		type="button"
+		class="md:hidden text-gray-300 hover:text-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 p-1 rounded-lg transition-all"
+		aria-label="打开菜单"
+	>
+		<Icon name="ri:menu-4-line" class="text-2xl" id="menu-icon-open" />
+		<Icon
+			name="ri:close-line"
+			class="text-2xl hidden"
+			id="menu-icon-close"
+		/>
+	</button>
 		</div>
 	</div>
 
@@ -178,9 +270,10 @@ const shouldOpenLoginModal =
 		</a>
 		<button
 			type="button"
-			class="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-3 text-lg font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-400"
+			class="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-3 text-lg font-medium text-gray-300 transition-all hover:border-primary-400 hover:text-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
 			data-open-login-modal
 			data-auth-guest
+			aria-label="打开登录弹窗"
 		>
 			<Icon name="ri:user-shared-line" class="text-xl" />
 			<span>登录</span>
@@ -211,6 +304,21 @@ const shouldOpenLoginModal =
 	</div>
 </nav>
 
+{
+	authToastResolved && (
+		<div
+			hidden
+			data-auth-toast-source
+			data-auth-toast-variant={authToastResolved.variant}
+			data-auth-toast-title={authToastResolved.title}
+			data-auth-toast-duration={
+				authToastResolved.variant === "error" ? "4000" : "3200"
+			}>
+			{authToastResolved.message}
+		</div>
+	)
+}
+
 <div
 	id="login-modal"
 	data-open={shouldOpenLoginModal ? "true" : "false"}
@@ -223,7 +331,8 @@ const shouldOpenLoginModal =
 		type="button"
 		class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
 		data-close-login-modal
-		aria-label="关闭登录弹窗"></button>
+		aria-label="关闭登录弹窗">
+		</button>
 
 	<div
 		class="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-dark-800/95 p-8 shadow-2xl shadow-black/40"
@@ -304,9 +413,324 @@ const shouldOpenLoginModal =
 	</div>
 </div>
 
+<style>
+	/* 与后台文档/荣誉一致的全局通知条（登录/退出反馈） */
+	:global(.notification-stack) {
+		position: fixed;
+		top: 5rem;
+		right: 1rem;
+		z-index: 260;
+		display: flex;
+		width: min(calc(100vw - 2rem), 24rem);
+		flex-direction: column;
+		gap: 0.85rem;
+		pointer-events: none;
+	}
+
+	@media (min-width: 768px) {
+		:global(.notification-stack) {
+			top: 6rem;
+		}
+	}
+
+	:global(.notification) {
+		position: relative;
+		overflow: hidden;
+		border-radius: 1.15rem;
+		border: 1px solid rgb(255 255 255 / 0.12);
+		padding: 1rem 1rem 0.95rem;
+		box-shadow:
+			0 20px 45px rgb(2 6 23 / 0.28),
+			0 8px 18px rgb(15 23 42 / 0.18);
+		backdrop-filter: blur(14px);
+		pointer-events: auto;
+		opacity: 0;
+		transform: translate3d(0, -14px, 0) scale(0.96);
+	}
+
+	:global(.notification.is-entering) {
+		animation: navbar-notification-in 0.38s cubic-bezier(0.2, 0.8, 0.2, 1)
+			forwards;
+	}
+
+	:global(.notification.is-leaving) {
+		animation: navbar-notification-out 0.28s ease forwards;
+	}
+
+	:global(.notification--success) {
+		background:
+			radial-gradient(
+				circle at top right,
+				rgb(74 222 128 / 0.22),
+				transparent 42%
+			),
+			linear-gradient(180deg, rgb(22 101 52 / 0.96), rgb(20 83 45 / 0.96));
+		color: rgb(240 253 244);
+	}
+
+	/* 与账户后台 AdminNotificationStyles 一致：错误通知此前仅账户页有样式，其它页几乎看不见 */
+	:global(.notification--error) {
+		background:
+			radial-gradient(
+				circle at top right,
+				rgb(248 113 113 / 0.22),
+				transparent 42%
+			),
+			linear-gradient(180deg, rgb(153 27 27 / 0.96), rgb(127 29 29 / 0.96));
+		color: rgb(254 242 242);
+	}
+
+	:global(.notification__glow) {
+		position: absolute;
+		inset: -35% auto auto 68%;
+		height: 7rem;
+		width: 7rem;
+		border-radius: 9999px;
+		background: rgb(255 255 255 / 0.12);
+		filter: blur(18px);
+		pointer-events: none;
+	}
+
+	:global(.notification__row) {
+		position: relative;
+		display: flex;
+		align-items: flex-start;
+		gap: 0.85rem;
+	}
+
+	:global(.notification__icon) {
+		display: inline-flex;
+		height: 2.25rem;
+		width: 2.25rem;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border-radius: 9999px;
+		border: 1px solid rgb(255 255 255 / 0.15);
+		background: rgb(255 255 255 / 0.1);
+		box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+	}
+
+	:global(.notification__icon svg) {
+		height: 1.1rem;
+		width: 1.1rem;
+	}
+
+	:global(.notification__content) {
+		min-width: 0;
+		flex: 1;
+	}
+
+	:global(.notification__title) {
+		font-size: 0.95rem;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+	}
+
+	:global(.notification__message) {
+		margin-top: 0.25rem;
+		font-size: 0.875rem;
+		line-height: 1.55;
+		color: rgb(255 255 255 / 0.9);
+		word-break: break-word;
+	}
+
+	:global(.notification__close) {
+		display: inline-flex;
+		height: 2rem;
+		width: 2rem;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border: 0;
+		border-radius: 9999px;
+		background: rgb(255 255 255 / 0.08);
+		color: inherit;
+		cursor: pointer;
+		transition:
+			background-color 0.18s ease,
+			transform 0.18s ease;
+	}
+
+	:global(.notification__close:hover) {
+		background: rgb(255 255 255 / 0.16);
+		transform: scale(1.04);
+	}
+
+	:global(.notification__progress) {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 3px;
+		background: rgb(255 255 255 / 0.18);
+		transform-origin: left center;
+		animation: navbar-notification-progress linear forwards;
+		animation-duration: var(--toast-duration, 3000ms);
+	}
+
+	@keyframes navbar-notification-in {
+		0% {
+			opacity: 0;
+			transform: translate3d(0, -14px, 0) scale(0.96);
+		}
+		65% {
+			opacity: 1;
+			transform: translate3d(0, 4px, 0) scale(1.01);
+		}
+		100% {
+			opacity: 1;
+			transform: translate3d(0, 0, 0) scale(1);
+		}
+	}
+
+	@keyframes navbar-notification-out {
+		0% {
+			opacity: 1;
+			transform: translate3d(0, 0, 0) scale(1);
+		}
+		100% {
+			opacity: 0;
+			transform: translate3d(0, -10px, 0) scale(0.97);
+		}
+	}
+
+	@keyframes navbar-notification-progress {
+		from {
+			transform: scaleX(1);
+		}
+		to {
+			transform: scaleX(0);
+		}
+	}
+</style>
+
 <script>
+	import { mountAccountChangePasswordForm } from "@/scripts/account-change-password";
+
+	function initNavbarAuthToast() {
+		const ensureStack = () => {
+			const existing = document.getElementById("notification-stack");
+			if (existing instanceof HTMLElement) {
+				return existing;
+			}
+
+			const stack = document.createElement("div");
+			stack.id = "notification-stack";
+			stack.className = "notification-stack";
+			stack.setAttribute("aria-live", "polite");
+			stack.setAttribute("aria-atomic", "false");
+			document.body.appendChild(stack);
+			return stack;
+		};
+
+		const removeToast = (toast: HTMLElement): void => {
+			if (!(toast instanceof HTMLElement) || toast.dataset.leaving === "true") {
+				return;
+			}
+
+			toast.dataset.leaving = "true";
+			toast.classList.remove("is-entering");
+			toast.classList.add("is-leaving");
+			window.setTimeout(() => {
+				toast.remove();
+			}, 300);
+		};
+
+		interface NavbarToastOptions {
+			message: string;
+			variant?: "success" | "error";
+			title?: string;
+			duration?: number;
+		}
+
+		const showToast = ({
+			message,
+			variant = "success",
+			title,
+			duration = 3000,
+		}: NavbarToastOptions): HTMLElement | undefined => {
+			if (!message) {
+				return;
+			}
+
+			const stack = ensureStack();
+			const toast = document.createElement("section");
+			const resolvedTitle =
+				title ?? (variant === "error" ? "操作失败" : "操作成功");
+			const icon =
+				variant === "error"
+					? '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1" fill="currentColor"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>'
+					: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7L9 18l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+			toast.className = `notification notification--${variant} is-entering`;
+			toast.setAttribute("role", "status");
+			toast.style.setProperty("--toast-duration", `${duration}ms`);
+			toast.innerHTML = `
+				<div class="notification__glow" aria-hidden="true"></div>
+				<div class="notification__row">
+					<div class="notification__icon" aria-hidden="true">${icon}</div>
+					<div class="notification__content">
+						<div class="notification__title">${resolvedTitle}</div>
+						<div class="notification__message"></div>
+					</div>
+					<button type="button" class="notification__close" aria-label="关闭通知">×</button>
+				</div>
+				<div class="notification__progress" aria-hidden="true"></div>
+			`;
+			const messageNode = toast.querySelector(".notification__message");
+			if (messageNode instanceof HTMLElement) {
+				messageNode.textContent = message;
+			}
+
+			const closeButton = toast.querySelector(".notification__close");
+			if (closeButton instanceof HTMLButtonElement) {
+				closeButton.addEventListener("click", () => removeToast(toast));
+			}
+
+			stack.appendChild(toast);
+			window.setTimeout(() => removeToast(toast), duration);
+			return toast;
+		};
+
+		document.querySelectorAll("[data-auth-toast-source]").forEach((source) => {
+			if (
+				!(source instanceof HTMLElement) ||
+				source.dataset.authToastConsumed === "true"
+			) {
+				return;
+			}
+
+			source.dataset.authToastConsumed = "true";
+			showToast({
+				message: source.textContent?.trim() ?? "",
+				variant:
+					source.dataset.authToastVariant === "error" ? "error" : "success",
+				title: source.dataset.authToastTitle ?? undefined,
+				duration:
+					Number(source.dataset.authToastDuration ?? "3000") || 3000,
+			});
+		});
+
+		const currentUrl = new URL(window.location.href);
+		if (
+			currentUrl.searchParams.has("auth") ||
+			currentUrl.searchParams.has("pwdErr")
+		) {
+			currentUrl.searchParams.delete("auth");
+			currentUrl.searchParams.delete("pwdErr");
+			window.history.replaceState(
+				{},
+				"",
+				`${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+			);
+		}
+	}
+
 	// Runs on initial load and after every navigation
 	document.addEventListener("astro:page-load", () => {
+		mountAccountChangePasswordForm();
+		initNavbarAuthToast();
 		const menuBtn = document.getElementById("mobile-menu-btn");
 		const mobileMenu = document.getElementById("mobile-menu");
 		const menuIconOpen = document.getElementById("menu-icon-open");
@@ -349,7 +773,9 @@ const shouldOpenLoginModal =
 				}
 			};
 
-			menuBtn.onclick = toggleMenu;
+			if (menuBtn instanceof HTMLElement) {
+				menuBtn.onclick = toggleMenu;
+			}
 		}
 
 		if (loginModal) {
@@ -364,9 +790,16 @@ const shouldOpenLoginModal =
 				document.body.style.overflow = "";
 
 				const url = new URL(window.location.href);
-				if (url.searchParams.has("login") || url.searchParams.has("error")) {
+				if (
+					url.searchParams.has("login") ||
+					url.searchParams.has("error") ||
+					url.searchParams.has("auth") ||
+					url.searchParams.has("pwdErr")
+				) {
 					url.searchParams.delete("login");
 					url.searchParams.delete("error");
+					url.searchParams.delete("auth");
+					url.searchParams.delete("pwdErr");
 					window.history.replaceState(
 						{},
 						"",
@@ -380,21 +813,25 @@ const shouldOpenLoginModal =
 			}
 
 			openModalButtons.forEach((button) => {
-				button.onclick = () => {
-					openModal();
-					if (mobileMenu) {
-						mobileMenu.classList.add("-translate-y-[150%]");
-					}
-					if (menuIconOpen && menuIconClose) {
-						menuIconOpen.classList.remove("hidden");
-						menuIconClose.classList.add("hidden");
-					}
-					isMenuOpen = false;
-				};
+				if (button instanceof HTMLElement) {
+					button.onclick = () => {
+						openModal();
+						if (mobileMenu) {
+							mobileMenu.classList.add("-translate-y-[150%]");
+						}
+						if (menuIconOpen && menuIconClose) {
+							menuIconOpen.classList.remove("hidden");
+							menuIconClose.classList.add("hidden");
+						}
+						isMenuOpen = false;
+					};
+				}
 			});
 
 			closeModalButtons.forEach((button) => {
-				button.onclick = closeModal;
+				if (button instanceof HTMLElement) {
+					button.onclick = closeModal;
+				}
 			});
 
 			document.onkeydown = (event) => {

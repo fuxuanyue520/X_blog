@@ -10,7 +10,7 @@ interface Props {
   showBanner?: boolean;
 }
 
-const { title, description = "秋兰以为佩的博客 - 技术与思考", showBanner = false } = Astro.props;
+const { title, description = "秋兰以为佩的博客", showBanner = false } = Astro.props;
 ---
 
 <!doctype html>
@@ -29,20 +29,6 @@ const { title, description = "秋兰以为佩的博客 - 技术与思考", showB
   </head>
   <body class="bg-dark-900 text-gray-200 min-h-screen flex flex-col font-sans selection:bg-primary-500/30 selection:text-primary-200 transition-colors duration-300">
     
-    <!-- Full Page Background Video -->
-    <div id="full-page-bg" class="fixed inset-0 z-[-2] transition-opacity duration-500 opacity-0 pointer-events-none overflow-hidden">
-        <video
-          class="absolute inset-0 w-full h-full object-cover"
-          autoplay
-          muted
-          loop
-          playsinline
-        >
-          <source src="/videos/background.mp4" type="video/mp4" />
-        </video>
-        <div class="absolute inset-0 bg-dark-900/70 backdrop-blur-[2px]"></div>
-    </div>
-
     <!-- Background Elements -->
     <div id="background-blobs" class="fixed inset-0 z-[-1] pointer-events-none transition-opacity duration-500">
         <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary-900/10 blur-[100px] animate-pulse-slow"></div>
@@ -120,13 +106,7 @@ const { title, description = "秋兰以为佩的博客 - 技术与思考", showB
     </script>
 
     <style is:global>
-      /* Wallpaper Mode Styles */
-      body.wallpaper-mode {
-        background-color: transparent !important;
-      }
-      body.wallpaper-mode #full-page-bg {
-        opacity: 1 !important;
-      }
+      /* Wallpaper Mode Styles（隐藏 Banner / 毛玻璃卡片等；背景视频仅在 Banner 内） */
       body.wallpaper-mode #background-blobs {
         opacity: 0;
       }

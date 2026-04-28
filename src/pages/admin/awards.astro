@@ -66,14 +66,55 @@ const activeFilters = {
 	awardLevel: selectedLevel || undefined,
 };
 
-const [awards, allAwards, editingAward, filterOptions] = await Promise.all([
-	listAwards(activeFilters),
+const startTime = Date.now();
+
+const [allAwards, editingAward] = await Promise.all([
 	listAwards(),
 	Number.isInteger(editId) && editId > 0
 		? getAwardById(editId)
 		: Promise.resolve(null),
-	listAwardFilterOptions(),
 ]);
+
+const loadTime1 = Date.now();
+
+const filterOptions = await listAwardFilterOptions();
+
+const loadTime2 = Date.now();
+
+const awards =
+	activeFilters.keyword ||
+	activeFilters.honorType ||
+	activeFilters.awardYear ||
+	activeFilters.awardLevel
+		? allAwards.filter((award) => {
+				if (activeFilters.keyword) {
+					const keywordLower = activeFilters.keyword.toLowerCase();
+					const matchKeyword =
+						award.title.toLowerCase().includes(keywordLower) ||
+						award.honorType.toLowerCase().includes(keywordLower) ||
+						award.awardLevel.toLowerCase().includes(keywordLower) ||
+						String(award.awardYear).includes(keywordLower);
+					if (!matchKeyword) return false;
+				}
+				if (
+					activeFilters.honorType &&
+					award.honorType !== activeFilters.honorType
+				)
+					return false;
+				if (
+					activeFilters.awardYear &&
+					award.awardYear !== activeFilters.awardYear
+				)
+					return false;
+				if (
+					activeFilters.awardLevel &&
+					award.awardLevel !== activeFilters.awardLevel
+				)
+					return false;
+				return true;
+			})
+		: allAwards;
+
 const groupedAwards = groupAwardsByType(awards);
 
 const typeOptions = filterOptions.types.map((type) => ({
@@ -120,41 +161,68 @@ function buildCountItems(values: string[]) {
 }
 
 function buildTypeSummary(items: typeof allAwards) {
+	const counts = new Map<string, number>();
+	for (const award of items) {
+		counts.set(award.honorType, (counts.get(award.honorType) ?? 0) + 1);
+	}
 	return HONOR_TYPES.map((type) => ({
 		label: type,
-		count: items.filter((award) => award.honorType === type).length,
+		count: counts.get(type) ?? 0,
 	})).filter((item) => item.count > 0);
 }
 
 function buildLevelSummary(items: typeof allAwards) {
+	const counts = new Map<string, number>();
+	const knownLevels = new Set(AWARD_LEVELS);
+
+	for (const award of items) {
+		if (award.awardLevel) {
+			counts.set(award.awardLevel, (counts.get(award.awardLevel) ?? 0) + 1);
+		}
+	}
+
 	const known = AWARD_LEVELS.map((level) => ({
 		label: level,
-		count: items.filter((award) => award.awardLevel === level).length,
+		count: counts.get(level) ?? 0,
 	})).filter((item) => item.count > 0);
-	const extras = buildCountItems(
-		items
-			.map((award) => award.awardLevel)
-			.filter(
-				(level) =>
-					level &&
-					!AWARD_LEVELS.includes(level as (typeof AWARD_LEVELS)[number]),
-			),
+
+	const extras: Array<{ label: string; count: number }> = [];
+	for (const [level, count] of counts.entries()) {
+		if (!knownLevels.has(level as (typeof AWARD_LEVELS)[number])) {
+			extras.push({ label: level, count });
+		}
+	}
+	extras.sort(
+		(left, right) =>
+			right.count - left.count ||
+			left.label.localeCompare(right.label, "zh-CN"),
 	);
 
 	return [...known, ...extras];
 }
 
 function buildYearSummary(items: typeof allAwards) {
-	return buildCountItems(items.map((award) => String(award.awardYear))).sort(
-		(left, right) =>
-			Number(right.label) - Number(left.label) || right.count - left.count,
-	);
+	const counts = new Map<string, number>();
+	for (const award of items) {
+		const year = String(award.awardYear);
+		counts.set(year, (counts.get(year) ?? 0) + 1);
+	}
+
+	return Array.from(counts.entries())
+		.map(([label, count]) => ({ label, count }))
+		.sort(
+			(left, right) =>
+				Number(right.label) - Number(left.label) || right.count - left.count,
+		);
 }
 
 const totalAwards = allAwards.length;
-const currentYearAwardsCount = allAwards.filter(
-	(award) => award.awardYear === currentYear,
-).length;
+let currentYearAwardsCount = 0;
+for (const award of allAwards) {
+	if (award.awardYear === currentYear) {
+		currentYearAwardsCount++;
+	}
+}
 const allTypeSummary = buildTypeSummary(allAwards).sort(
 	(left, right) =>
 		right.count - left.count || left.label.localeCompare(right.label),
@@ -254,7 +322,7 @@ const shouldOpenCreateModal =
 				</div>
 			</div>
 
-			<div class="mt-4 grid gap-3 xl:grid-cols-3">
+			<div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 				<div class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5">
 					<div class="flex items-center justify-between gap-3">
 						<h3 class="text-sm font-semibold text-white">类型分布</h3>
@@ -263,7 +331,7 @@ const shouldOpenCreateModal =
 					<p class="mt-1 text-xs text-gray-500">
 						共 {totalAwards} 条
 					</p>
-					<div class="mt-3 space-y-2">
+					<div class="mt-3 max-h-48 space-y-2 overflow-y-auto">
 						{
 							allTypeSummary.length > 0 ? (
 								allTypeSummary.map((item) => (
@@ -294,14 +362,14 @@ const shouldOpenCreateModal =
 						<h3 class="text-sm font-semibold text-white">年份走势</h3>
 						<span class="text-xs text-gray-500">最近 5 年</span>
 					</div>
-					<div class="mt-2">
+					<div class="mt-2 max-h-48 overflow-y-auto">
 						{
 							recentYearSummary.length > 0 ? (
 								<div class="rounded-2xl border border-white/10 bg-dark-950/40 p-2.5">
 									<svg
 										viewBox={`0 0 ${lineChartWidth} ${lineChartHeight}`}
 										preserveAspectRatio="xMidYMid meet"
-										class="aspect-[2.2/1] w-full"
+										class="aspect-[2.2/1] max-h-40 w-full"
 										aria-label="荣誉年份走势波形图"
 									>
 										<defs>
@@ -399,18 +467,20 @@ const shouldOpenCreateModal =
 					</div>
 				</div>
 
-				<div class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5">
+				<div
+					class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5 md:col-span-2 xl:col-span-1"
+				>
 					<div class="flex items-center justify-between gap-3">
 						<h3 class="text-sm font-semibold text-white">级别分布</h3>
 					</div>
-					<div class="mt-2">
+					<div class="mt-2 max-h-48 overflow-y-auto">
 						{
 							levelPieSegments.length > 0 ? (
 								<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-									<div class="mx-auto w-full max-w-[180px] shrink-0">
+									<div class="mx-auto w-full max-w-[140px] shrink-0">
 										<svg
 											viewBox="0 0 100 100"
-											class="mx-auto h-40 w-40"
+											class="mx-auto h-32 w-32"
 											aria-label="荣誉级别分布饼图"
 										>
 											<circle
@@ -466,16 +536,15 @@ const shouldOpenCreateModal =
 
 		<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5">
 			<div
-				class="mb-4 flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between"
+				class="mb-4 flex min-w-0 flex-col gap-3 md:flex-row md:flex-nowrap md:items-center md:justify-between"
 			>
-				<div>
-					<h2 class="text-xl font-semibold text-white md:text-2xl">荣誉列表</h2>
-				</div>
-				<div class="flex flex-wrap gap-3">
+				<h2 class="min-w-0 text-xl font-semibold text-white md:text-2xl">荣誉列表</h2>
+				<div class="flex shrink-0 flex-nowrap gap-3">
 					<button
 						type="button"
-						class="inline-flex min-h-[42px] items-center gap-2 rounded-xl bg-primary-500 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_24px_rgba(14,165,233,0.16)] transition hover:bg-primary-600 hover:shadow-[0_12px_28px_rgba(14,165,233,0.22)]"
+						class="inline-flex min-h-[42px] shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-primary-500 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_24px_rgba(14,165,233,0.16)] transition-all hover:bg-primary-600 hover:shadow-[0_12px_28px_rgba(14,165,233,0.22)] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
 						data-open-award-modal="create"
+						aria-label="新建荣誉记录"
 					>
 						<Icon name="ri:add-circle-line" class="text-lg" />
 						新建
@@ -489,8 +558,8 @@ const shouldOpenCreateModal =
 				data-admin-awards-filter-form
 				class="mb-4"
 			>
-				<div class="flex flex-wrap items-center gap-2.5">
-					<div class="relative min-w-[220px] flex-[1_1_280px] xl:max-w-[320px]">
+				<div class="admin-filter-toolbar grid w-full grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1fr)_10rem_10rem_10rem_auto_auto] lg:items-stretch">
+					<div class="relative min-h-[48px] min-w-0">
 						<input
 							type="search"
 							name="q"
@@ -500,7 +569,7 @@ const shouldOpenCreateModal =
 						/>
 					</div>
 					<div
-						class="relative min-w-[160px] flex-[1_1_180px] xl:max-w-[220px]"
+						class="relative min-h-[48px] min-w-0 w-full"
 						data-custom-select-root
 						data-select-submit-on-change="true"
 					>
@@ -510,7 +579,7 @@ const shouldOpenCreateModal =
 							value={selectedType}
 							data-select-input
 						/>
-						<details class="custom-select">
+						<details class="custom-select custom-select--filter-toolbar">
 							<summary class="custom-select__trigger">
 								<span
 									class={`custom-select__label ${selectedType ? "is-selected" : ""}`}
@@ -542,7 +611,7 @@ const shouldOpenCreateModal =
 						</details>
 					</div>
 					<div
-						class="relative min-w-[160px] flex-[1_1_180px] xl:max-w-[220px]"
+						class="relative min-h-[48px] min-w-0 w-full"
 						data-custom-select-root
 						data-select-submit-on-change="true"
 					>
@@ -552,7 +621,7 @@ const shouldOpenCreateModal =
 							value={selectedYearValue}
 							data-select-input
 						/>
-						<details class="custom-select">
+						<details class="custom-select custom-select--filter-toolbar">
 							<summary class="custom-select__trigger">
 								<span
 									class={`custom-select__label ${selectedYearValue ? "is-selected" : ""}`}
@@ -586,7 +655,7 @@ const shouldOpenCreateModal =
 						</details>
 					</div>
 					<div
-						class="relative min-w-[160px] flex-[1_1_180px] xl:max-w-[220px]"
+						class="relative min-h-[48px] min-w-0 w-full"
 						data-custom-select-root
 						data-select-submit-on-change="true"
 					>
@@ -596,7 +665,7 @@ const shouldOpenCreateModal =
 							value={selectedLevel}
 							data-select-input
 						/>
-						<details class="custom-select">
+						<details class="custom-select custom-select--filter-toolbar">
 							<summary class="custom-select__trigger">
 								<span
 									class={`custom-select__label ${selectedLevel ? "is-selected" : ""}`}
@@ -629,14 +698,16 @@ const shouldOpenCreateModal =
 					</div>
 					<button
 						type="submit"
-						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-600 sm:min-w-[112px]"
+						class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl bg-primary-500 px-5 text-sm font-medium text-white transition-all hover:bg-primary-600 lg:min-w-[5.5rem] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+						aria-label="搜索荣誉记录"
 					>
 						搜索
 					</button>
 					<a
 						href="/admin/awards"
 						data-admin-awards-clear
-						class="inline-flex min-h-[48px] items-center justify-center rounded-2xl border border-white/10 px-4 py-2.5 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300 sm:min-w-[112px]"
+						class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-white/10 px-5 text-sm font-medium text-gray-300 transition-all hover:border-primary-400 hover:text-primary-300 lg:min-w-[5.5rem] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+						aria-label="清空筛选条件"
 					>
 						清空
 					</a>
@@ -700,7 +771,7 @@ const shouldOpenCreateModal =
 												<div class="flex flex-wrap gap-2 md:flex-col md:items-end">
 													<button
 														type="button"
-														class="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-gray-200 transition hover:border-primary-400 hover:text-primary-300 md:min-w-[84px]"
+														class="inline-flex min-h-[38px] items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-gray-200 transition-all hover:border-primary-400 hover:text-primary-300 md:min-w-[84px] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
 														data-open-award-modal="edit"
 														data-award-id={award.id}
 														data-award-type={award.honorType}
@@ -710,17 +781,23 @@ const shouldOpenCreateModal =
 														data-award-level={award.awardLevel}
 														data-award-image-name={award.imageName}
 														data-award-image-url={award.imageUrl}
+														aria-label={`编辑荣誉记录 ${award.title}`}
 													>
 														<Icon name="ri:edit-line" class="text-base" />
 														编辑
 													</button>
-													<form method="POST" action="/api/admin/awards/delete">
+													<form
+														method="POST"
+														action="/api/admin/awards/delete"
+														class="delete-award-form"
+													>
 														<input type="hidden" name="id" value={award.id} />
 														<button
-															type="button"
-															class="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition hover:border-red-500/40 hover:bg-red-500/15 md:min-w-[84px]"
+															type="submit"
+															class="inline-flex min-h-[38px] items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-all hover:border-red-500/40 hover:bg-red-500/15 md:min-w-[84px] focus:outline-none focus:ring-2 focus:ring-red-500/20"
 															data-open-delete-modal
 															data-award-title={award.title}
+															aria-label={`删除荣誉记录 ${award.title}`}
 														>
 															<Icon
 																name="ri:delete-bin-line"
@@ -768,11 +845,43 @@ const shouldOpenCreateModal =
 				type="button"
 				class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
 				data-close-award-modal
-				aria-label="关闭弹窗"></button>
+				aria-label="关闭弹窗"
+			>
+			</button>
 
 			<div
 				class="relative z-10 my-auto flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-white/10 bg-dark-800/95 shadow-2xl shadow-black/40 sm:max-h-[calc(100vh-4rem)]"
 			>
+				{/*
+					弹窗文案以 #award-strings-bank 内各 id 节点正文的 text 为准（所见即所得，勿用 data- 再存一份）。
+					客户端打开弹窗、切换新建/编辑时也会读这些元素的 textContent。
+				*/}
+				<div
+					id="award-strings-bank"
+					class="sr-only"
+					aria-hidden="true"
+				>
+					<span id="award-s-create-title" class="block">新建荣誉</span>
+					<span id="award-s-create-desc" class="block"
+						>上传荣誉图片或 PDF</span
+					>
+					<span id="award-s-edit-title" class="block">编辑荣誉</span>
+					<span id="award-s-edit-desc" class="block"
+						>更新当前荣誉的图片和分类信息。</span
+					>
+					<span id="award-s-image-label-new" class="block">图片 / PDF</span>
+					<span id="award-s-image-label-edit" class="block"
+						>图片 / PDF（如需更换再上传）</span
+					>
+					<span id="award-s-submit-new" class="block">新建</span>
+					<span id="award-s-submit-edit" class="block">保存修改</span>
+					<span id="award-s-ocr-new" class="block"
+						>上传荣誉图片或 PDF 后，这里会展示 OCR 提取出的完整文本。</span
+					>
+					<span id="award-s-ocr-edit" class="block"
+						>如重新上传荣誉图片或 PDF，这里会展示新的 OCR 原文。</span
+					>
+				</div>
 				<div
 					class="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3 md:px-6"
 				>
@@ -787,11 +896,35 @@ const shouldOpenCreateModal =
 							id="award-modal-title"
 							class="mt-3 text-2xl font-semibold text-white"
 						>
-							新建
 						</h2>
-						<p id="award-modal-description" class="mt-2 text-sm text-gray-400">
-							上传荣誉图片或 PDF，并配置展示信息。
+						<p
+							id="award-modal-description"
+							class="mt-2 text-sm text-gray-400"
+						>
 						</p>
+						<script
+							is:inline
+							define:vars={{ isEdit: shouldOpenEditModal }}
+						>
+							(function (edit) {
+								var t = function (id) {
+									var e = document.getElementById(id);
+									return e && e.textContent
+										? e.textContent.trim()
+										: "";
+								};
+								var titleId = edit
+									? "award-s-edit-title"
+									: "award-s-create-title";
+								var descId = edit
+									? "award-s-edit-desc"
+									: "award-s-create-desc";
+								var mt = document.getElementById("award-modal-title");
+								var md = document.getElementById("award-modal-description");
+								if (mt) mt.textContent = t(titleId);
+								if (md) md.textContent = t(descId);
+							})(isEdit);
+						</script>
 					</div>
 					<button
 						type="button"
@@ -1059,15 +1192,17 @@ const shouldOpenCreateModal =
 				<div class="mt-6 flex justify-end gap-3">
 					<button
 						type="button"
-						class="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-primary-400 hover:text-primary-300"
+						class="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition-all hover:border-primary-400 hover:text-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
 						data-close-delete-modal
+						aria-label="取消删除"
 					>
 						取消
 					</button>
 					<button
 						id="confirm-delete-button"
 						type="button"
-						class="rounded-2xl bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600"
+						class="rounded-2xl bg-red-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+						aria-label="确认删除"
 					>
 						确定删除
 					</button>
@@ -1145,6 +1280,16 @@ const shouldOpenCreateModal =
 
 	.custom-select {
 		position: relative;
+	}
+
+	.custom-select--filter-toolbar {
+		width: 100%;
+	}
+
+	.custom-select--filter-toolbar .custom-select__trigger {
+		min-height: 48px;
+		padding-top: 0.65rem;
+		padding-bottom: 0.65rem;
 	}
 
 	.custom-select > summary {
@@ -1503,15 +1648,24 @@ const shouldOpenCreateModal =
 </style>
 
 <script>
-	function normalizePlainText(value) {
+	interface Window {
+		showAwardToast?: (options: {
+			message: string;
+			variant?: "success" | "error";
+			title?: string;
+			duration?: number;
+		}) => HTMLElement | undefined;
+	}
+
+	function normalizePlainText(value: string): string {
 		return value.replace(/\s+/g, " ").trim();
 	}
 
-	function normalizeCompactText(value) {
+	function normalizeCompactText(value: string): string {
 		return value.replace(/\s+/g, "");
 	}
 
-	function normalizeCompetitionName(value) {
+	function normalizeCompetitionName(value: string): string {
 		return value
 			.replace(/^(在|于)/u, "")
 			.replace(/^(?:19|20)\d{2}年/u, "")
@@ -1523,7 +1677,10 @@ const shouldOpenCreateModal =
 			.trim();
 	}
 
-	function isLikelySchoolLine(line, competitionKeywords) {
+	function isLikelySchoolLine(
+		line: string,
+		competitionKeywords: RegExp,
+	): boolean {
 		if (/^(学校|院校)[:：]/u.test(line)) {
 			return true;
 		}
@@ -1534,11 +1691,11 @@ const shouldOpenCreateModal =
 		);
 	}
 
-	function uniqueValues(values) {
+	function uniqueValues(values: string[]): string[] {
 		return [...new Set(values.filter(Boolean))];
 	}
 
-	function getOcrLines(texts) {
+	function getOcrLines(texts: string[]): string[] {
 		return uniqueValues(
 			texts.flatMap((text) =>
 				text
@@ -1550,9 +1707,9 @@ const shouldOpenCreateModal =
 		);
 	}
 
-	function buildOcrRawText(texts) {
-		const mergedLines = [];
-		const seen = new Set();
+	function buildOcrRawText(texts: string[]): string {
+		const mergedLines: string[] = [];
+		const seen = new Set<string>();
 
 		for (const text of texts) {
 			const lines = String(text ?? "")
@@ -1573,7 +1730,7 @@ const shouldOpenCreateModal =
 		return mergedLines.join("\n");
 	}
 
-	function findAwardName(text, lines) {
+	function findAwardName(text: string, lines: string[]): string {
 		const actionMatch = normalizeCompactText(text).match(
 			/(?:荣获|获得|取得|获评|被评为)(特等奖学金|一等奖学金|二等奖学金|三等奖学金|团体特等奖|团体一等奖|团体二等奖|团体三等奖|特等奖|一等奖|二等奖|三等奖|金奖|银奖|铜奖|优秀奖|优胜奖|入围奖|成功参赛奖|纪念奖|冠军|亚军|季军|第[一二三四五六七八九十百零]+名|第\d+名)/u,
 		);
@@ -1610,7 +1767,11 @@ const shouldOpenCreateModal =
 		return "";
 	}
 
-	function findCompetitionName(lines, text, awardName) {
+	function findCompetitionName(
+		lines: string[],
+		text: string,
+		awardName?: string,
+	): string {
 		const competitionKeywords =
 			/(竞赛|大赛|比赛|挑战赛|评选|活动|杯|建模|程序设计|电子设计|创新创业|互联网\+|机器人大赛|演讲赛|辩论赛|运动会|技能赛|作品赛|创业赛|创青春|挑战杯|英语赛|数学赛|物理赛|化学赛)/u;
 		const compactText = normalizeCompactText(text);
@@ -1689,12 +1850,12 @@ const shouldOpenCreateModal =
 		return longestLine ? normalizeCompetitionName(longestLine) : "";
 	}
 
-	function findAwardYear(text) {
+	function findAwardYear(text: string): string {
 		const match = text.match(/((?:19|20)\d{2})/);
 		return match ? match[1] : "";
 	}
 
-	function findAwardLevel(text) {
+	function findAwardLevel(text: string): string {
 		const compactText = normalizeCompactText(text);
 		if (/(世界|国际|全球|洲际)/u.test(compactText)) {
 			return "世界级";
@@ -1714,8 +1875,15 @@ const shouldOpenCreateModal =
 		return "";
 	}
 
-	function summarizeFilledFields(parsed) {
-		const labels = [];
+	interface ParsedAwardData {
+		competitionName?: string;
+		awardName?: string;
+		awardYear?: string;
+		awardLevel?: string;
+	}
+
+	function summarizeFilledFields(parsed: ParsedAwardData): string[] {
+		const labels: string[] = [];
 		if (parsed.competitionName) {
 			labels.push("名称");
 		}
@@ -1731,11 +1899,11 @@ const shouldOpenCreateModal =
 		return labels;
 	}
 
-	function countFilledFields(parsed) {
+	function countFilledFields(parsed: ParsedAwardData): number {
 		return summarizeFilledFields(parsed).length;
 	}
 
-	function hasStrongFieldSignal(parsed) {
+	function hasStrongFieldSignal(parsed: ParsedAwardData): boolean {
 		return Boolean(
 			parsed.competitionName ||
 			parsed.awardName ||
@@ -1744,7 +1912,7 @@ const shouldOpenCreateModal =
 		);
 	}
 
-	function analyzeOcrTextQuality(text) {
+	function analyzeOcrTextQuality(text: string) {
 		const compactText = normalizeCompactText(text);
 		const totalChars = compactText.length || 1;
 		const chineseChars = (compactText.match(/[\u4e00-\u9fff]/gu) ?? []).length;
@@ -1767,7 +1935,10 @@ const shouldOpenCreateModal =
 		};
 	}
 
-	function scoreOcrCandidate(parsed, averageConfidence = 0) {
+	function scoreOcrCandidate(
+		parsed: ParsedAwardData & { rawText?: string },
+		averageConfidence = 0,
+	): number {
 		const quality = analyzeOcrTextQuality(parsed.rawText ?? "");
 		const filledFields = countFilledFields(parsed);
 		let score = 0;
@@ -1792,7 +1963,9 @@ const shouldOpenCreateModal =
 		return score;
 	}
 
-	function extractAwardInfoFromTexts(texts) {
+	function extractAwardInfoFromTexts(
+		texts: string[],
+	): ParsedAwardData & { rawText: string } {
 		const rawText = buildOcrRawText(texts);
 		const lines = getOcrLines([rawText]);
 		const flatText = normalizePlainText(rawText);
@@ -1810,6 +1983,10 @@ const shouldOpenCreateModal =
 
 	function initCustomSelects() {
 		document.querySelectorAll("[data-custom-select-root]").forEach((root) => {
+			if (!(root instanceof HTMLElement)) {
+				return;
+			}
+
 			if (root.dataset.selectReady === "true") {
 				return;
 			}
@@ -1833,7 +2010,7 @@ const shouldOpenCreateModal =
 			}
 
 			root.dataset.selectReady = "true";
-			let closeTimer;
+			let closeTimer: number | undefined;
 
 			root.addEventListener("mouseenter", () => {
 				if (closeTimer) {
@@ -1918,7 +2095,7 @@ const shouldOpenCreateModal =
 		const confirmDeleteButton = document.getElementById(
 			"confirm-delete-button",
 		);
-		let currentDeleteForm = null;
+		let currentDeleteForm: HTMLFormElement | null = null;
 
 		if (
 			!(modal instanceof HTMLElement) ||
@@ -1947,7 +2124,7 @@ const shouldOpenCreateModal =
 			return;
 		}
 
-		const moveOverlayToBody = (element) => {
+		const moveOverlayToBody = (element: HTMLElement): void => {
 			if (element.parentElement !== document.body) {
 				document.body.appendChild(element);
 			}
@@ -1960,8 +2137,33 @@ const shouldOpenCreateModal =
 			return;
 		}
 		modal.dataset.initialized = "true";
-		const parseBooleanData = (value) => value === "true";
-		const parseJsonData = (value) => {
+
+		/** 与模板中 #award-strings-bank 内各 #award-s-* 节点正文一致，改文案只改那些 span 的文本。 */
+		const str = (id: string) =>
+			document.getElementById(id)?.textContent?.trim() ?? "";
+		const readAwardModalCopy = () => ({
+			createTitle: str("award-s-create-title"),
+			createDesc: str("award-s-create-desc"),
+			editTitle: str("award-s-edit-title"),
+			editDesc: str("award-s-edit-desc"),
+			imageLabelNew: str("award-s-image-label-new"),
+			imageLabelEdit: str("award-s-image-label-edit"),
+			submitNew: str("award-s-submit-new"),
+			submitEdit: str("award-s-submit-edit"),
+			ocrNew: str("award-s-ocr-new"),
+			ocrEdit: str("award-s-ocr-edit"),
+		});
+		const modalCopy = readAwardModalCopy();
+
+		const awardsWindow = window as Window & {
+			__awardAdminAbortController?: AbortController;
+		};
+		awardsWindow.__awardAdminAbortController?.abort();
+		const abortController = new AbortController();
+		awardsWindow.__awardAdminAbortController = abortController;
+		const listenerOptions = { signal: abortController.signal };
+		const parseBooleanData = (value: string): boolean => value === "true";
+		const parseJsonData = (value: string): unknown => {
 			if (!value) {
 				return null;
 			}
@@ -1983,8 +2185,8 @@ const shouldOpenCreateModal =
 		const currentYear =
 			Number(modal.dataset.currentYear) || new Date().getFullYear();
 		let currentOcrJob = 0;
-		let currentOcrRequest = null;
-		let ocrProgressTimer = null;
+		let currentOcrRequest: XMLHttpRequest | null = null;
+		let ocrProgressTimer: number | null = null;
 
 		const clearOcrProgressTimer = () => {
 			if (ocrProgressTimer) {
@@ -2000,7 +2202,7 @@ const shouldOpenCreateModal =
 			ocrTextInput.style.backgroundSize = "";
 		};
 
-		const setOcrProgress = (value, status) => {
+		const setOcrProgress = (value: number, status: string): void => {
 			const normalizedValue = Math.max(0, Math.min(100, Math.round(value)));
 			setOcrDisplay(`${status}\n\n进度：${normalizedValue}%`, "loading");
 			ocrTextInput.style.backgroundImage = `linear-gradient(to right, rgba(34, 211, 238, 0.22) 0%, rgba(34, 211, 238, 0.22) ${normalizedValue}%, rgba(15, 23, 42, 0.18) ${normalizedValue}%, rgba(15, 23, 42, 0.18) 100%)`;
@@ -2014,7 +2216,7 @@ const shouldOpenCreateModal =
 			clearOcrProgressVisual();
 		};
 
-		const setOcrDisplay = (message, tone = "default") => {
+		const setOcrDisplay = (message: string, tone = "default"): void => {
 			ocrTextInput.value = message;
 			ocrTextInput.classList.remove(
 				"text-gray-300",
@@ -2050,7 +2252,10 @@ const shouldOpenCreateModal =
 			);
 		};
 
-		const syncCustomSelectValue = (root, nextValue) => {
+		const syncCustomSelectValue = (
+			root: HTMLElement,
+			nextValue: string,
+		): void => {
 			const input = root.querySelector("[data-select-input]");
 			const label = root.querySelector("[data-select-label]");
 			const options = root.querySelectorAll("[data-select-option]");
@@ -2080,7 +2285,9 @@ const shouldOpenCreateModal =
 			});
 		};
 
-		const fillFormFromOcr = (parsed) => {
+		const fillFormFromOcr = (
+			parsed: ParsedAwardData & { rawText?: string },
+		): void => {
 			setOcrDisplay(parsed.rawText ?? "");
 			if (parsed.competitionName) {
 				competitionNameInput.value = parsed.competitionName;
@@ -2096,100 +2303,121 @@ const shouldOpenCreateModal =
 			}
 		};
 
-		const requestOcrCandidates = (file, jobId) =>
-			new Promise((resolve, reject) => {
-				const formData = new FormData();
-				formData.append("image", file);
+		interface OcrCandidate {
+			text: string;
+			label?: string;
+			averageConfidence?: number;
+		}
 
-				if (currentOcrRequest) {
-					currentOcrRequest.abort();
-				}
+		interface OcrResponse {
+			candidates?: OcrCandidate[];
+			error?: string;
+		}
 
-				const request = new XMLHttpRequest();
-				currentOcrRequest = request;
-				let simulatedProgress = 38;
+		const requestOcrCandidates = (
+			file: File,
+			jobId: number,
+		): Promise<OcrResponse> =>
+			new Promise(
+				(
+					resolve: (value: OcrResponse) => void,
+					reject: (reason: Error) => void,
+				) => {
+					const formData = new FormData();
+					formData.append("image", file);
 
-				const finishRequest = () => {
-					clearOcrProgressTimer();
-					if (currentOcrRequest === request) {
-						currentOcrRequest = null;
+					if (currentOcrRequest) {
+						currentOcrRequest.abort();
 					}
-				};
 
-				const startSimulatedProgress = () => {
-					clearOcrProgressTimer();
-					ocrProgressTimer = window.setInterval(() => {
+					const request = new XMLHttpRequest();
+					currentOcrRequest = request;
+					let simulatedProgress = 38;
+
+					const finishRequest = () => {
+						clearOcrProgressTimer();
+						if (currentOcrRequest === request) {
+							currentOcrRequest = null;
+						}
+					};
+
+					const startSimulatedProgress = () => {
+						clearOcrProgressTimer();
+						ocrProgressTimer = window.setInterval(() => {
+							if (jobId !== currentOcrJob) {
+								return;
+							}
+							if (simulatedProgress < 72) {
+								simulatedProgress += 4;
+							} else if (simulatedProgress < 90) {
+								simulatedProgress += 1;
+							}
+							const status =
+								simulatedProgress < 65
+									? "服务端正在识别荣誉图片文字..."
+									: "正在整理 OCR 结果并准备回填...";
+							setOcrProgress(simulatedProgress, status);
+						}, 320);
+					};
+
+					request.open("POST", "/api/admin/awards/ocr");
+					request.responseType = "json";
+
+					request.upload.addEventListener("loadstart", () => {
 						if (jobId !== currentOcrJob) {
 							return;
 						}
-						if (simulatedProgress < 72) {
-							simulatedProgress += 4;
-						} else if (simulatedProgress < 90) {
-							simulatedProgress += 1;
+						setOcrProgress(5, "正在准备上传荣誉文件...");
+					});
+
+					request.upload.addEventListener("progress", (event) => {
+						if (jobId !== currentOcrJob || !event.lengthComputable) {
+							return;
 						}
-						const status =
-							simulatedProgress < 65
-								? "服务端正在识别荣誉图片文字..."
-								: "正在整理 OCR 结果并准备回填...";
-						setOcrProgress(simulatedProgress, status);
-					}, 320);
-				};
+						const percent = 5 + Math.round((event.loaded / event.total) * 30);
+						setOcrProgress(percent, "正在上传荣誉文件...");
+					});
 
-				request.open("POST", "/api/admin/awards/ocr");
-				request.responseType = "json";
+					request.upload.addEventListener("load", () => {
+						if (jobId !== currentOcrJob) {
+							return;
+						}
+						setOcrProgress(38, "文件上传完成，服务端开始识别...");
+						startSimulatedProgress();
+					});
 
-				request.upload.addEventListener("loadstart", () => {
-					if (jobId !== currentOcrJob) {
-						return;
-					}
-					setOcrProgress(5, "正在准备上传荣誉文件...");
-				});
+					request.addEventListener("load", () => {
+						finishRequest();
+						const payload =
+							request.response && typeof request.response === "object"
+								? request.response
+								: {};
+						if (request.status >= 200 && request.status < 300) {
+							resolve(payload);
+							return;
+						}
+						reject(
+							new Error(
+								payload?.error || "自动解析失败，请手动填写表单后提交。",
+							),
+						);
+					});
 
-				request.upload.addEventListener("progress", (event) => {
-					if (jobId !== currentOcrJob || !event.lengthComputable) {
-						return;
-					}
-					const percent = 5 + Math.round((event.loaded / event.total) * 30);
-					setOcrProgress(percent, "正在上传荣誉文件...");
-				});
+					request.addEventListener("error", () => {
+						finishRequest();
+						reject(new Error("OCR 请求失败，请稍后重试。"));
+					});
 
-				request.upload.addEventListener("load", () => {
-					if (jobId !== currentOcrJob) {
-						return;
-					}
-					setOcrProgress(38, "文件上传完成，服务端开始识别...");
-					startSimulatedProgress();
-				});
+					request.addEventListener("abort", () => {
+						finishRequest();
+						reject(new Error("OCR 请求已取消。"));
+					});
 
-				request.addEventListener("load", () => {
-					finishRequest();
-					const payload =
-						request.response && typeof request.response === "object"
-							? request.response
-							: {};
-					if (request.status >= 200 && request.status < 300) {
-						resolve(payload);
-						return;
-					}
-					reject(
-						new Error(payload?.error || "自动解析失败，请手动填写表单后提交。"),
-					);
-				});
+					request.send(formData);
+				},
+			);
 
-				request.addEventListener("error", () => {
-					finishRequest();
-					reject(new Error("OCR 请求失败，请稍后重试。"));
-				});
-
-				request.addEventListener("abort", () => {
-					finishRequest();
-					reject(new Error("OCR 请求已取消。"));
-				});
-
-				request.send(formData);
-			});
-
-		const parseImageWithOcr = async (file) => {
+		const parseImageWithOcr = async (file: File): Promise<void> => {
 			const jobId = ++currentOcrJob;
 			setOcrProgress(5, "正在准备上传荣誉文件...");
 
@@ -2287,7 +2515,7 @@ const shouldOpenCreateModal =
 			}
 		};
 
-		const openDeleteModal = (button) => {
+		const openDeleteModal = (button: HTMLElement): void => {
 			currentDeleteForm = button.closest("form");
 			deleteName.textContent = `“${button.dataset.awardTitle ?? "该记录"}”`;
 			deleteModal.classList.remove("hidden");
@@ -2315,19 +2543,30 @@ const shouldOpenCreateModal =
 			yearInput.value = String(currentYear);
 			syncCustomSelectValue(levelSelectRoot, "");
 			resetOcrProgress();
-			setOcrDisplay("上传荣誉图片或 PDF 后，这里会展示 OCR 提取出的完整文本。");
+			setOcrDisplay(modalCopy.ocrNew);
 			imageInput.required = true;
-			imageLabel.textContent = "图片 / PDF";
+			imageLabel.textContent = modalCopy.imageLabelNew;
 			imageHint.classList.add("hidden");
 			imageLink.href = "#";
 			imageLink.textContent = "";
-			modalTitle.textContent = "新建";
-			modalDescription.textContent = "上传荣誉图片或 PDF，并配置展示信息。";
-			submitText.textContent = "新建";
+			modalTitle.textContent = modalCopy.createTitle;
+			modalDescription.textContent = modalCopy.createDesc;
+			submitText.textContent = modalCopy.submitNew;
 			submitIcon.setAttribute("name", "ri:add-circle-line");
 		};
 
-		const fillFormForEdit = (award) => {
+		interface AwardFormData {
+			id?: number;
+			honorType?: string;
+			competitionName?: string;
+			awardName?: string;
+			awardYear?: number;
+			awardLevel?: string;
+			imageName?: string;
+			imageUrl?: string;
+		}
+
+		const fillFormForEdit = (award: AwardFormData): void => {
 			if (currentOcrRequest) {
 				currentOcrRequest.abort();
 				currentOcrRequest = null;
@@ -2341,95 +2580,112 @@ const shouldOpenCreateModal =
 			resetOcrProgress();
 			imageInput.value = "";
 			imageInput.required = false;
-			setOcrDisplay("如重新上传荣誉图片或 PDF，这里会展示新的 OCR 原文。");
-			imageLabel.textContent = "图片 / PDF（如需更换再上传）";
+			setOcrDisplay(modalCopy.ocrEdit);
+			imageLabel.textContent = modalCopy.imageLabelEdit;
 			imageHint.classList.remove("hidden");
 			imageLink.href = award.imageUrl ?? "#";
 			imageLink.textContent = award.imageName ?? "查看当前图片";
-			modalTitle.textContent = "编辑荣誉";
-			modalDescription.textContent = "更新当前荣誉的图片和分类信息。";
-			submitText.textContent = "保存修改";
+			modalTitle.textContent = modalCopy.editTitle;
+			modalDescription.textContent = modalCopy.editDesc;
+			submitText.textContent = modalCopy.submitEdit;
 			submitIcon.setAttribute("name", "ri:save-line");
 		};
-		imageInput.addEventListener("change", () => {
-			const file = imageInput.files?.[0];
-			if (!file) {
-				resetOcrProgress();
-				setOcrDisplay(
-					idInput.value
-						? "如重新上传荣誉图片或 PDF，这里会展示新的 OCR 原文。"
-						: "上传荣誉图片或 PDF 后，这里会展示 OCR 提取出的完整文本。",
-				);
-				return;
-			}
-
-			void parseImageWithOcr(file);
-		});
-
-		document.addEventListener("click", (event) => {
-			const target = event.target;
-			if (!(target instanceof Element)) {
-				return;
-			}
-
-			const openButton = target.closest("[data-open-award-modal]");
-			if (openButton instanceof HTMLElement) {
-				const mode = openButton.dataset.openAwardModal;
-				if (mode === "edit") {
-					const idValue = openButton.dataset.awardId ?? "";
-					if (!idValue) {
-						return;
-					}
-
-					fillFormForEdit({
-						id: Number(idValue),
-						honorType: openButton.dataset.awardType ?? "奖项",
-						competitionName: openButton.dataset.awardCompetitionName ?? "",
-						awardName: openButton.dataset.awardName ?? "",
-						awardYear: Number(openButton.dataset.awardYear ?? currentYear),
-						awardLevel: openButton.dataset.awardLevel ?? "",
-						imageName: openButton.dataset.awardImageName ?? "",
-						imageUrl: openButton.dataset.awardImageUrl ?? "#",
-					});
-				} else {
-					resetFormForCreate();
+		imageInput.addEventListener(
+			"change",
+			() => {
+				const file = imageInput.files?.[0];
+				if (!file) {
+					resetOcrProgress();
+					setOcrDisplay(
+						idInput.value ? modalCopy.ocrEdit : modalCopy.ocrNew,
+					);
+					return;
 				}
 
-				openModal();
-				return;
-			}
+				void parseImageWithOcr(file);
+			},
+			listenerOptions,
+		);
 
-			const closeButton = target.closest("[data-close-award-modal]");
-			if (closeButton) {
-				closeModal();
-				return;
-			}
+		document.addEventListener(
+			"click",
+			(event: MouseEvent) => {
+				const target = event.target as Element;
+				if (!(target instanceof Element)) {
+					return;
+				}
 
-			const deleteButton = target.closest("[data-open-delete-modal]");
-			if (deleteButton instanceof HTMLElement) {
-				openDeleteModal(deleteButton);
-				return;
-			}
+				const openButton = target.closest("[data-open-award-modal]");
+				if (openButton instanceof HTMLElement) {
+					const mode = openButton.dataset.openAwardModal;
+					if (mode === "edit") {
+						const idValue = openButton.dataset.awardId ?? "";
+						if (!idValue) {
+							return;
+						}
 
-			if (target.closest("[data-close-delete-modal]")) {
-				closeDeleteModal();
-			}
-		});
+						fillFormForEdit({
+							id: Number(idValue),
+							honorType: openButton.dataset.awardType ?? "奖项",
+							competitionName: openButton.dataset.awardCompetitionName ?? "",
+							awardName: openButton.dataset.awardName ?? "",
+							awardYear: Number(openButton.dataset.awardYear ?? currentYear),
+							awardLevel: openButton.dataset.awardLevel ?? "",
+							imageName: openButton.dataset.awardImageName ?? "",
+							imageUrl: openButton.dataset.awardImageUrl ?? "#",
+						});
+					} else {
+						resetFormForCreate();
+					}
 
-		confirmDeleteButton.addEventListener("click", () => {
-			if (currentDeleteForm instanceof HTMLFormElement) {
-				currentDeleteForm.submit();
-			}
-		});
+					openModal();
+					return;
+				}
 
-		document.addEventListener("keydown", (event) => {
-			if (event.key === "Escape" && !deleteModal.classList.contains("hidden")) {
-				closeDeleteModal();
-			}
-			if (event.key === "Escape" && !modal.classList.contains("hidden")) {
-				closeModal();
-			}
-		});
+				const closeButton = target.closest("[data-close-award-modal]");
+				if (closeButton) {
+					closeModal();
+					return;
+				}
+
+				const deleteButton = target.closest("[data-open-delete-modal]");
+				if (deleteButton instanceof HTMLElement) {
+					openDeleteModal(deleteButton);
+					return;
+				}
+
+				if (target.closest("[data-close-delete-modal]")) {
+					closeDeleteModal();
+				}
+			},
+			listenerOptions,
+		);
+
+		confirmDeleteButton.addEventListener(
+			"click",
+			() => {
+				if (currentDeleteForm instanceof HTMLFormElement) {
+					currentDeleteForm.submit();
+				}
+			},
+			listenerOptions,
+		);
+
+		document.addEventListener(
+			"keydown",
+			(event) => {
+				if (
+					event.key === "Escape" &&
+					!deleteModal.classList.contains("hidden")
+				) {
+					closeDeleteModal();
+				}
+				if (event.key === "Escape" && !modal.classList.contains("hidden")) {
+					closeModal();
+				}
+			},
+			listenerOptions,
+		);
 
 		if (shouldOpenEditModal && initialEditingAward) {
 			fillFormForEdit(initialEditingAward);
@@ -2456,7 +2712,7 @@ const shouldOpenCreateModal =
 
 		form.dataset.partialReady = "true";
 
-		const buildUrlFromForm = () => {
+		const buildUrlFromForm = (): URL => {
 			const url = new URL(
 				form.getAttribute("action") || window.location.pathname,
 				window.location.origin,
@@ -2473,7 +2729,7 @@ const shouldOpenCreateModal =
 			return url;
 		};
 
-		const syncFormWithUrl = (url) => {
+		const syncFormWithUrl = (url: URL): void => {
 			const keywordInput = form.querySelector('input[name="q"]');
 			if (keywordInput instanceof HTMLInputElement) {
 				keywordInput.value = url.searchParams.get("q") ?? "";
@@ -2512,7 +2768,10 @@ const shouldOpenCreateModal =
 			});
 		};
 
-		const refreshResults = async (url, replaceHistory = false) => {
+		const refreshResults = async (
+			url: URL | string,
+			replaceHistory = false,
+		): Promise<void> => {
 			results.setAttribute("aria-busy", "true");
 			results.style.opacity = "0.55";
 
@@ -2524,7 +2783,7 @@ const shouldOpenCreateModal =
 				});
 
 				if (!response.ok) {
-					window.location.href = url;
+					window.location.href = typeof url === "string" ? url : url.toString();
 					return;
 				}
 
@@ -2533,7 +2792,7 @@ const shouldOpenCreateModal =
 				const nextResults = doc.querySelector("[data-admin-awards-results]");
 
 				if (!(nextResults instanceof HTMLElement)) {
-					window.location.href = url;
+					window.location.href = typeof url === "string" ? url : url.toString();
 					return;
 				}
 
@@ -2549,13 +2808,13 @@ const shouldOpenCreateModal =
 			}
 		};
 
-		form.addEventListener("submit", async (event) => {
+		form.addEventListener("submit", async (event: SubmitEvent) => {
 			event.preventDefault();
 			await refreshResults(buildUrlFromForm().toString());
 		});
 
-		form.addEventListener("click", async (event) => {
-			const target = event.target;
+		form.addEventListener("click", async (event: MouseEvent) => {
+			const target = event.target as Element;
 			if (!(target instanceof Element)) {
 				return;
 			}
@@ -2571,8 +2830,8 @@ const shouldOpenCreateModal =
 			await refreshResults(url.toString());
 		});
 
-		results.addEventListener("click", async (event) => {
-			const target = event.target;
+		results.addEventListener("click", async (event: MouseEvent) => {
+			const target = event.target as Element;
 			if (!(target instanceof Element)) {
 				return;
 			}
@@ -2594,11 +2853,22 @@ const shouldOpenCreateModal =
 			await refreshResults(url.toString());
 		});
 
-		window.addEventListener("popstate", async () => {
+		const awardsWindow = window as Window & {
+			__adminAwardsPopstateHandler?: () => void;
+		};
+		if (awardsWindow.__adminAwardsPopstateHandler) {
+			window.removeEventListener(
+				"popstate",
+				awardsWindow.__adminAwardsPopstateHandler,
+			);
+		}
+		const popstateHandler = () => {
 			const url = new URL(window.location.href);
 			syncFormWithUrl(url);
-			await refreshResults(url.toString(), true);
-		});
+			void refreshResults(url.toString(), true);
+		};
+		window.addEventListener("popstate", popstateHandler);
+		awardsWindow.__adminAwardsPopstateHandler = popstateHandler;
 	}
 
 	function initAwardToast() {
@@ -2617,7 +2887,7 @@ const shouldOpenCreateModal =
 			return stack;
 		};
 
-		const removeToast = (toast) => {
+		const removeToast = (toast: HTMLElement): void => {
 			if (!(toast instanceof HTMLElement) || toast.dataset.leaving === "true") {
 				return;
 			}
@@ -2630,12 +2900,19 @@ const shouldOpenCreateModal =
 			}, 300);
 		};
 
+		interface ToastOptions {
+			message: string;
+			variant?: "success" | "error";
+			title?: string;
+			duration?: number;
+		}
+
 		const showToast = ({
 			message,
 			variant = "success",
 			title,
 			duration = 3000,
-		}) => {
+		}: ToastOptions): HTMLElement | undefined => {
 			if (!message) {
 				return;
 			}
@@ -2680,7 +2957,9 @@ const shouldOpenCreateModal =
 		};
 
 		if (typeof window !== "undefined") {
-			window.showAwardToast = showToast;
+			(
+				window as unknown as { showAwardToast: typeof showToast }
+			).showAwardToast = showToast;
 		}
 
 		document.querySelectorAll("[data-toast-source]").forEach((source) => {
@@ -2718,12 +2997,23 @@ const shouldOpenCreateModal =
 		}
 	}
 
-	initCustomSelects();
-	initAwardAdmin();
-	initAdminAwardsPartialRefresh();
-	initAwardToast();
-	document.addEventListener("astro:page-load", initCustomSelects);
-	document.addEventListener("astro:page-load", initAwardAdmin);
-	document.addEventListener("astro:page-load", initAdminAwardsPartialRefresh);
-	document.addEventListener("astro:page-load", initAwardToast);
+	const runAwardsPageInit = () => {
+		if (window.location.pathname !== "/admin/awards") {
+			return;
+		}
+		initCustomSelects();
+		initAwardAdmin();
+		initAdminAwardsPartialRefresh();
+		initAwardToast();
+	};
+
+	runAwardsPageInit();
+
+	const awardsWindow = window as Window & {
+		__adminAwardsPageLoadBound?: boolean;
+	};
+	if (!awardsWindow.__adminAwardsPageLoadBound) {
+		document.addEventListener("astro:page-load", runAwardsPageInit);
+		awardsWindow.__adminAwardsPageLoadBound = true;
+	}
 </script>

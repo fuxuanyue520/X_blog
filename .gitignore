@@ -23,12 +23,6 @@ pnpm-debug.log*
 .env.test
 .env.test.local
 
-# local database
-data/
-*.db
-*.sqlite
-*.sqlite3
-
 # python cache / virtual env (for OCR scripts)
 __pycache__/
 *.pyc

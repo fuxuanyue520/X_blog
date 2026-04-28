@@ -5,7 +5,8 @@
 @layer base {
 	body {
 		@apply bg-dark-900 text-gray-200 antialiased transition-colors duration-300;
-		background-image: radial-gradient(
+		background-image:
+			radial-gradient(
 				circle at 15% 50%,
 				rgba(76, 29, 149, 0.08),
 				transparent 25%
@@ -99,11 +100,14 @@
 
 /* Hover Animations */
 .hover-lift {
-	transition: transform 0.3s ease, box-shadow 0.3s ease;
+	transition:
+		transform 0.3s ease,
+		box-shadow 0.3s ease;
 }
 .hover-lift:hover {
 	transform: translateY(-4px);
-	box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1),
+	box-shadow:
+		0 10px 25px -5px rgba(0, 0, 0, 0.1),
 		0 8px 10px -6px rgba(0, 0, 0, 0.1);
 }
 

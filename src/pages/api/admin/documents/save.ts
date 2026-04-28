@@ -47,8 +47,6 @@ export const POST: APIRoute = async (context) => {
 				.split(/[,，\n]/)
 				.map((item) => item.trim())
 				.filter(Boolean),
-			publishedAt: String(formData.get("publishedAt") ?? "").trim(),
-			updatedAt: String(formData.get("updatedAt") ?? "").trim() || undefined,
 			coverImage: String(formData.get("coverImage") ?? "").trim() || undefined,
 			isPinned: formData.get("isPinned") === "true",
 			draft: formData.get("draft") === "true",
