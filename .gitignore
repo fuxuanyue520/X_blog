@@ -39,3 +39,16 @@ venv/
 .idea/
 *.swp
 *.swo
+
+# Astro specific
+*.astro.md
+
+# TypeScript cache
+.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Temporary files
+*.tmp
+*.temp
