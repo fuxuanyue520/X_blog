@@ -66,7 +66,7 @@ function getMysqlConfig() {
 	};
 }
 
-function createDatabaseClient() {
+async function createDatabaseClient() {
 	if (!dbClient) {
 		const config = getMysqlConfig();
 		poolClient = mysql.createPool({
@@ -80,8 +80,17 @@ function createDatabaseClient() {
 			queueLimit: 0,
 			charset: "utf8mb4",
 			dateStrings: true,
+			connectTimeout: 5000,
 		});
-		dbClient = new MysqlDbClient(poolClient);
+
+		try {
+			await poolClient.getConnection();
+			dbClient = new MysqlDbClient(poolClient);
+		} catch (error) {
+			console.error("数据库连接失败:", error);
+			await poolClient.end();
+			throw new Error("无法连接到数据库，请检查配置是否正确");
+		}
 	}
 
 	return dbClient;
@@ -167,36 +176,17 @@ async function ensureMissingTables(db: AppDbClient) {
 }
 
 async function initializeDatabase() {
-	const db = createDatabaseClient();
-	await ensureMissingTables(db);
-	await db.execute({
-		sql: "DELETE FROM admin_sessions WHERE expires_at <= ?",
-		args: [new Date().toISOString()],
-	});
-
-	const adminUser = await db.execute({
-		sql: "SELECT id FROM admin_users WHERE username = ? LIMIT 1",
-		args: ["admin"],
-	});
-
-	if (adminUser.rows.length === 0) {
-		const { hash, salt } = hashPassword("admin123");
-
-		await db.execute({
-			sql: `
-				INSERT INTO admin_users (username, password_hash, password_salt)
-				VALUES (?, ?, ?)
-			`,
-			args: ["admin", hash, salt],
-		});
-	}
-
+	const db = await createDatabaseClient();
 	return db;
 }
 
 export async function getDb() {
 	if (!dbPromise) {
-		dbPromise = initializeDatabase();
+		dbPromise = initializeDatabase().catch((error) => {
+			console.error("数据库初始化失败:", error);
+			dbPromise = undefined;
+			throw error;
+		});
 	}
 
 	return dbPromise;
