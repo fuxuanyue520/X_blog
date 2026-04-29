@@ -69,6 +69,13 @@ function getMysqlConfig() {
 async function createDatabaseClient() {
 	if (!dbClient) {
 		const config = getMysqlConfig();
+		console.log("正在连接数据库:", {
+			host: config.host,
+			port: config.port,
+			user: config.user,
+			database: config.database,
+		});
+
 		poolClient = mysql.createPool({
 			host: config.host,
 			port: config.port,
@@ -84,10 +91,12 @@ async function createDatabaseClient() {
 		});
 
 		try {
+			console.log("测试数据库连接...");
 			await poolClient.getConnection();
+			console.log("✅ 数据库连接成功！");
 			dbClient = new MysqlDbClient(poolClient);
 		} catch (error) {
-			console.error("数据库连接失败:", error);
+			console.error("❌ 数据库连接失败:", error);
 			await poolClient.end();
 			throw new Error("无法连接到数据库，请检查配置是否正确");
 		}
