@@ -2,6 +2,7 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { Icon } from "astro-icon/components";
 import { getAuthenticatedAdmin } from "@/lib/auth";
+import { homeUrlPromptLoginFromAdminAttempt } from "@/lib/admin-login-redirect";
 import {
 	AWARD_LEVELS,
 	HONOR_TYPES,
@@ -17,7 +18,7 @@ export const prerender = false;
 const admin = await getAuthenticatedAdmin(Astro);
 
 if (!admin) {
-	return Astro.redirect("/?login=1");
+	return Astro.redirect(homeUrlPromptLoginFromAdminAttempt(Astro.url));
 }
 
 const status = Astro.url.searchParams.get("status") ?? "";
@@ -177,7 +178,10 @@ function buildLevelSummary(items: typeof allAwards) {
 
 	for (const award of items) {
 		if (award.awardLevel) {
-			counts.set(award.awardLevel, (counts.get(award.awardLevel) ?? 0) + 1);
+			counts.set(
+				award.awardLevel,
+				(counts.get(award.awardLevel) ?? 0) + 1,
+			);
 		}
 	}
 
@@ -212,7 +216,8 @@ function buildYearSummary(items: typeof allAwards) {
 		.map(([label, count]) => ({ label, count }))
 		.sort(
 			(left, right) =>
-				Number(right.label) - Number(left.label) || right.count - left.count,
+				Number(right.label) - Number(left.label) ||
+				right.count - left.count,
 		);
 }
 
@@ -249,7 +254,9 @@ const wavePoints = recentYearSummary.map((item, index) => {
 				(index / (recentYearSummary.length - 1)) * lineChartInnerWidth
 			: lineChartPadding.left + lineChartInnerWidth / 2;
 	const normalizedHeight =
-		maxWaveCount > 0 ? (item.count / maxWaveCount) * lineChartInnerHeight : 0;
+		maxWaveCount > 0
+			? (item.count / maxWaveCount) * lineChartInnerHeight
+			: 0;
 
 	return {
 		...item,
@@ -304,28 +311,30 @@ const shouldOpenCreateModal =
 					data-toast-source
 					data-toast-variant={toastVariant}
 					data-toast-title={toastTitle}
-					data-toast-duration={String(toastDuration)}
-				>
+					data-toast-duration={String(toastDuration)}>
 					{feedbackMessage}
 				</div>
 			)
 		}
 
 		<section
-			class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5"
-		>
+			class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5">
 			<div>
 				<div>
-					<h2 class="mt-2 text-xl font-semibold text-white md:text-2xl">
+					<h2
+						class="mt-2 text-xl font-semibold text-white md:text-2xl">
 						荣誉汇总
 					</h2>
 				</div>
 			</div>
 
 			<div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-				<div class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5">
+				<div
+					class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5">
 					<div class="flex items-center justify-between gap-3">
-						<h3 class="text-sm font-semibold text-white">类型分布</h3>
+						<h3 class="text-sm font-semibold text-white">
+							类型分布
+						</h3>
 						<span class="text-xs text-gray-500">按数量降序</span>
 					</div>
 					<p class="mt-1 text-xs text-gray-500">
@@ -337,7 +346,9 @@ const shouldOpenCreateModal =
 								allTypeSummary.map((item) => (
 									<div class="space-y-1.5">
 										<div class="flex items-center justify-between gap-3 text-[13px]">
-											<span class="truncate text-gray-200">{item.label}</span>
+											<span class="truncate text-gray-200">
+												{item.label}
+											</span>
 											<span class="shrink-0 text-gray-400">
 												{item.count} 条
 											</span>
@@ -351,15 +362,20 @@ const shouldOpenCreateModal =
 									</div>
 								))
 							) : (
-								<p class="text-sm text-gray-500">暂无荣誉数据</p>
+								<p class="text-sm text-gray-500">
+									暂无荣誉数据
+								</p>
 							)
 						}
 					</div>
 				</div>
 
-				<div class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5">
+				<div
+					class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5">
 					<div class="flex items-center justify-between gap-3">
-						<h3 class="text-sm font-semibold text-white">年份走势</h3>
+						<h3 class="text-sm font-semibold text-white">
+							年份走势
+						</h3>
 						<span class="text-xs text-gray-500">最近 5 年</span>
 					</div>
 					<div class="mt-2 max-h-48 overflow-y-auto">
@@ -370,17 +386,18 @@ const shouldOpenCreateModal =
 										viewBox={`0 0 ${lineChartWidth} ${lineChartHeight}`}
 										preserveAspectRatio="xMidYMid meet"
 										class="aspect-[2.2/1] max-h-40 w-full"
-										aria-label="荣誉年份走势波形图"
-									>
+										aria-label="荣誉年份走势波形图">
 										<defs>
 											<linearGradient
 												id="awards-wave-fill"
 												x1="0"
 												x2="0"
 												y1="0"
-												y2="1"
-											>
-												<stop offset="0%" stop-color="rgb(56 189 248 / 0.35)" />
+												y2="1">
+												<stop
+													offset="0%"
+													stop-color="rgb(56 189 248 / 0.35)"
+												/>
 												<stop
 													offset="100%"
 													stop-color="rgb(56 189 248 / 0.02)"
@@ -391,17 +408,31 @@ const shouldOpenCreateModal =
 												x1="0"
 												x2="1"
 												y1="0"
-												y2="0"
-											>
-												<stop offset="0%" stop-color="rgb(34 211 238)" />
-												<stop offset="100%" stop-color="rgb(96 165 250)" />
+												y2="0">
+												<stop
+													offset="0%"
+													stop-color="rgb(34 211 238)"
+												/>
+												<stop
+													offset="100%"
+													stop-color="rgb(96 165 250)"
+												/>
 											</linearGradient>
 										</defs>
 										<line
 											x1={lineChartPadding.left}
-											y1={lineChartHeight - lineChartPadding.bottom}
-											x2={lineChartWidth - lineChartPadding.right}
-											y2={lineChartHeight - lineChartPadding.bottom}
+											y1={
+												lineChartHeight -
+												lineChartPadding.bottom
+											}
+											x2={
+												lineChartWidth -
+												lineChartPadding.right
+											}
+											y2={
+												lineChartHeight -
+												lineChartPadding.bottom
+											}
 											stroke="rgb(255 255 255 / 0.08)"
 											stroke-width="0.8"
 										/>
@@ -410,13 +441,19 @@ const shouldOpenCreateModal =
 												x1={point.x}
 												y1={lineChartPadding.top}
 												x2={point.x}
-												y2={lineChartHeight - lineChartPadding.bottom}
+												y2={
+													lineChartHeight -
+													lineChartPadding.bottom
+												}
 												stroke="rgb(255 255 255 / 0.06)"
 												stroke-width="0.6"
 											/>
 										))}
 										{waveAreaPath && (
-											<path d={waveAreaPath} fill="url(#awards-wave-fill)" />
+											<path
+												d={waveAreaPath}
+												fill="url(#awards-wave-fill)"
+											/>
 										)}
 										{wavePath && (
 											<path
@@ -440,11 +477,13 @@ const shouldOpenCreateModal =
 												/>
 												<text
 													x={point.x}
-													y={Math.max(point.y - 6, 10)}
+													y={Math.max(
+														point.y - 6,
+														10,
+													)}
 													text-anchor="middle"
 													font-size="7"
-													fill="rgb(226 232 240)"
-												>
+													fill="rgb(226 232 240)">
 													{point.count}
 												</text>
 												<text
@@ -452,8 +491,7 @@ const shouldOpenCreateModal =
 													y={lineChartHeight - 4}
 													text-anchor="middle"
 													font-size="6.5"
-													fill="rgb(148 163 184)"
-												>
+													fill="rgb(148 163 184)">
 													{point.label}
 												</text>
 											</g>
@@ -461,17 +499,20 @@ const shouldOpenCreateModal =
 									</svg>
 								</div>
 							) : (
-								<p class="text-sm text-gray-500">暂无年份统计</p>
+								<p class="text-sm text-gray-500">
+									暂无年份统计
+								</p>
 							)
 						}
 					</div>
 				</div>
 
 				<div
-					class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5 md:col-span-2 xl:col-span-1"
-				>
+					class="rounded-2xl border border-white/10 bg-dark-900/40 p-3.5 md:col-span-2 xl:col-span-1">
 					<div class="flex items-center justify-between gap-3">
-						<h3 class="text-sm font-semibold text-white">级别分布</h3>
+						<h3 class="text-sm font-semibold text-white">
+							级别分布
+						</h3>
 					</div>
 					<div class="mt-2 max-h-48 overflow-y-auto">
 						{
@@ -481,8 +522,7 @@ const shouldOpenCreateModal =
 										<svg
 											viewBox="0 0 100 100"
 											class="mx-auto h-32 w-32"
-											aria-label="荣誉级别分布饼图"
-										>
+											aria-label="荣誉级别分布饼图">
 											<circle
 												cx="50"
 												cy="50"
@@ -492,19 +532,25 @@ const shouldOpenCreateModal =
 												stroke-width="12"
 											/>
 											<g transform="rotate(-90 50 50)">
-												{levelPieSegments.map((item) => (
-													<circle
-														cx="50"
-														cy="50"
-														r={pieRadius}
-														fill="none"
-														stroke={item.color}
-														stroke-width="12"
-														stroke-linecap="butt"
-														stroke-dasharray={item.dashArray}
-														stroke-dashoffset={item.dashOffset}
-													/>
-												))}
+												{levelPieSegments.map(
+													(item) => (
+														<circle
+															cx="50"
+															cy="50"
+															r={pieRadius}
+															fill="none"
+															stroke={item.color}
+															stroke-width="12"
+															stroke-linecap="butt"
+															stroke-dasharray={
+																item.dashArray
+															}
+															stroke-dashoffset={
+																item.dashOffset
+															}
+														/>
+													),
+												)}
 											</g>
 										</svg>
 									</div>
@@ -516,17 +562,25 @@ const shouldOpenCreateModal =
 														class="h-2.5 w-2.5 rounded-full"
 														style={`background:${item.color}`}
 													/>
-													<span class="text-gray-200">{item.label}</span>
+													<span class="text-gray-200">
+														{item.label}
+													</span>
 												</div>
 												<span class="text-gray-400">
-													{item.count} / {Math.round(item.ratio * 100)}%
+													{item.count} /{" "}
+													{Math.round(
+														item.ratio * 100,
+													)}
+													%
 												</span>
 											</div>
 										))}
 									</div>
 								</div>
 							) : (
-								<span class="text-sm text-gray-500">暂无级别标签</span>
+								<span class="text-sm text-gray-500">
+									暂无级别标签
+								</span>
 							)
 						}
 					</div>
@@ -534,18 +588,20 @@ const shouldOpenCreateModal =
 			</div>
 		</section>
 
-		<div class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5">
+		<div
+			class="rounded-3xl border border-white/10 bg-dark-800/70 p-4 md:p-5">
 			<div
-				class="mb-4 flex min-w-0 flex-col gap-3 md:flex-row md:flex-nowrap md:items-center md:justify-between"
-			>
-				<h2 class="min-w-0 text-xl font-semibold text-white md:text-2xl">荣誉列表</h2>
+				class="mb-4 flex min-w-0 flex-col gap-3 md:flex-row md:flex-nowrap md:items-center md:justify-between">
+				<h2
+					class="min-w-0 text-xl font-semibold text-white md:text-2xl">
+					荣誉列表
+				</h2>
 				<div class="flex shrink-0 flex-nowrap gap-3">
 					<button
 						type="button"
 						class="inline-flex min-h-[42px] shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-primary-500 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_24px_rgba(14,165,233,0.16)] transition-all hover:bg-primary-600 hover:shadow-[0_12px_28px_rgba(14,165,233,0.22)] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
 						data-open-award-modal="create"
-						aria-label="新建荣誉记录"
-					>
+						aria-label="新建荣誉记录">
 						<Icon name="ri:add-circle-line" class="text-lg" />
 						新建
 					</button>
@@ -556,9 +612,9 @@ const shouldOpenCreateModal =
 				action="/admin/awards"
 				method="GET"
 				data-admin-awards-filter-form
-				class="mb-4"
-			>
-				<div class="admin-filter-toolbar grid w-full grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1fr)_10rem_10rem_10rem_auto_auto] lg:items-stretch">
+				class="mb-4">
+				<div
+					class="admin-filter-toolbar grid w-full grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1fr)_10rem_10rem_10rem_auto_auto] lg:items-stretch">
 					<div class="relative min-h-[48px] min-w-0">
 						<input
 							type="search"
@@ -571,21 +627,27 @@ const shouldOpenCreateModal =
 					<div
 						class="relative min-h-[48px] min-w-0 w-full"
 						data-custom-select-root
-						data-select-submit-on-change="true"
-					>
+						data-select-submit-on-change="true">
 						<input
 							type="hidden"
 							name="type"
 							value={selectedType}
 							data-select-input
 						/>
-						<details class="custom-select custom-select--filter-toolbar">
+						<details
+							class="custom-select custom-select--filter-toolbar">
 							<summary class="custom-select__trigger">
 								<span
 									class={`custom-select__label ${selectedType ? "is-selected" : ""}`}
 									data-select-label
 									data-placeholder="类型"
-									>{getSelectedLabel(typeOptions, selectedType, "类型")}</span
+									>{
+										getSelectedLabel(
+											typeOptions,
+											selectedType,
+											"类型",
+										)
+									}</span
 								>
 								<Icon
 									name="ri:arrow-down-s-line"
@@ -600,10 +662,12 @@ const shouldOpenCreateModal =
 											class={`custom-select__option ${option.value === selectedType ? "is-active" : ""}`}
 											data-select-option
 											data-value={option.value}
-											data-label={option.label}
-										>
+											data-label={option.label}>
 											<span>{option.label}</span>
-											<span class="custom-select__check" aria-hidden="true" />
+											<span
+												class="custom-select__check"
+												aria-hidden="true"
+											/>
 										</button>
 									))
 								}
@@ -613,22 +677,26 @@ const shouldOpenCreateModal =
 					<div
 						class="relative min-h-[48px] min-w-0 w-full"
 						data-custom-select-root
-						data-select-submit-on-change="true"
-					>
+						data-select-submit-on-change="true">
 						<input
 							type="hidden"
 							name="year"
 							value={selectedYearValue}
 							data-select-input
 						/>
-						<details class="custom-select custom-select--filter-toolbar">
+						<details
+							class="custom-select custom-select--filter-toolbar">
 							<summary class="custom-select__trigger">
 								<span
 									class={`custom-select__label ${selectedYearValue ? "is-selected" : ""}`}
 									data-select-label
 									data-placeholder="年份"
 									>{
-										getSelectedLabel(yearOptions, selectedYearValue, "年份")
+										getSelectedLabel(
+											yearOptions,
+											selectedYearValue,
+											"年份",
+										)
 									}</span
 								>
 								<Icon
@@ -644,10 +712,12 @@ const shouldOpenCreateModal =
 											class={`custom-select__option ${option.value === selectedYearValue ? "is-active" : ""}`}
 											data-select-option
 											data-value={option.value}
-											data-label={option.label}
-										>
+											data-label={option.label}>
 											<span>{option.label}</span>
-											<span class="custom-select__check" aria-hidden="true" />
+											<span
+												class="custom-select__check"
+												aria-hidden="true"
+											/>
 										</button>
 									))
 								}
@@ -657,21 +727,27 @@ const shouldOpenCreateModal =
 					<div
 						class="relative min-h-[48px] min-w-0 w-full"
 						data-custom-select-root
-						data-select-submit-on-change="true"
-					>
+						data-select-submit-on-change="true">
 						<input
 							type="hidden"
 							name="level"
 							value={selectedLevel}
 							data-select-input
 						/>
-						<details class="custom-select custom-select--filter-toolbar">
+						<details
+							class="custom-select custom-select--filter-toolbar">
 							<summary class="custom-select__trigger">
 								<span
 									class={`custom-select__label ${selectedLevel ? "is-selected" : ""}`}
 									data-select-label
 									data-placeholder="级别"
-									>{getSelectedLabel(levelOptions, selectedLevel, "级别")}</span
+									>{
+										getSelectedLabel(
+											levelOptions,
+											selectedLevel,
+											"级别",
+										)
+									}</span
 								>
 								<Icon
 									name="ri:arrow-down-s-line"
@@ -686,10 +762,12 @@ const shouldOpenCreateModal =
 											class={`custom-select__option ${option.value === selectedLevel ? "is-active" : ""}`}
 											data-select-option
 											data-value={option.value}
-											data-label={option.label}
-										>
+											data-label={option.label}>
 											<span>{option.label}</span>
-											<span class="custom-select__check" aria-hidden="true" />
+											<span
+												class="custom-select__check"
+												aria-hidden="true"
+											/>
 										</button>
 									))
 								}
@@ -699,16 +777,14 @@ const shouldOpenCreateModal =
 					<button
 						type="submit"
 						class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl bg-primary-500 px-5 text-sm font-medium text-white transition-all hover:bg-primary-600 lg:min-w-[5.5rem] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-						aria-label="搜索荣誉记录"
-					>
+						aria-label="搜索荣誉记录">
 						搜索
 					</button>
 					<a
 						href="/admin/awards"
 						data-admin-awards-clear
 						class="inline-flex min-h-[48px] w-full items-center justify-center whitespace-nowrap rounded-2xl border border-white/10 px-5 text-sm font-medium text-gray-300 transition-all hover:border-primary-400 hover:text-primary-300 lg:min-w-[5.5rem] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-						aria-label="清空筛选条件"
-					>
+						aria-label="清空筛选条件">
 						清空
 					</a>
 				</div>
@@ -741,8 +817,7 @@ const shouldOpenCreateModal =
 													highlightId === award.id
 														? "border-primary-400/50 shadow-[0_0_0_1px_rgba(34,211,238,0.3)]"
 														: "",
-												]}
-											>
+												]}>
 												<div class="overflow-hidden rounded-xl bg-dark-950">
 													<img
 														src={award.imageUrl}
@@ -760,7 +835,9 @@ const shouldOpenCreateModal =
 														</span>
 														{award.awardLevel && (
 															<span class="rounded-full border border-primary-500/30 bg-primary-500/10 px-2.5 py-1 text-primary-200">
-																{award.awardLevel}
+																{
+																	award.awardLevel
+																}
 															</span>
 														)}
 														<span class="rounded-full border border-white/10 bg-dark-800 px-2.5 py-1 text-gray-300">
@@ -774,31 +851,51 @@ const shouldOpenCreateModal =
 														class="inline-flex min-h-[38px] items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-gray-200 transition-all hover:border-primary-400 hover:text-primary-300 md:min-w-[84px] focus:outline-none focus:ring-2 focus:ring-primary-500/20"
 														data-open-award-modal="edit"
 														data-award-id={award.id}
-														data-award-type={award.honorType}
-														data-award-competition-name={award.competitionName}
-														data-award-name={award.awardName}
-														data-award-year={award.awardYear}
-														data-award-level={award.awardLevel}
-														data-award-image-name={award.imageName}
-														data-award-image-url={award.imageUrl}
-														aria-label={`编辑荣誉记录 ${award.title}`}
-													>
-														<Icon name="ri:edit-line" class="text-base" />
+														data-award-type={
+															award.honorType
+														}
+														data-award-competition-name={
+															award.competitionName
+														}
+														data-award-name={
+															award.awardName
+														}
+														data-award-year={
+															award.awardYear
+														}
+														data-award-level={
+															award.awardLevel
+														}
+														data-award-image-name={
+															award.imageName
+														}
+														data-award-image-url={
+															award.imageUrl
+														}
+														aria-label={`编辑荣誉记录 ${award.title}`}>
+														<Icon
+															name="ri:edit-line"
+															class="text-base"
+														/>
 														编辑
 													</button>
 													<form
 														method="POST"
 														action="/api/admin/awards/delete"
-														class="delete-award-form"
-													>
-														<input type="hidden" name="id" value={award.id} />
+														class="delete-award-form">
+														<input
+															type="hidden"
+															name="id"
+															value={award.id}
+														/>
 														<button
 															type="submit"
 															class="inline-flex min-h-[38px] items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-all hover:border-red-500/40 hover:bg-red-500/15 md:min-w-[84px] focus:outline-none focus:ring-2 focus:ring-red-500/20"
 															data-open-delete-modal
-															data-award-title={award.title}
-															aria-label={`删除荣誉记录 ${award.title}`}
-														>
+															data-award-title={
+																award.title
+															}
+															aria-label={`删除荣誉记录 ${award.title}`}>
 															<Icon
 																name="ri:delete-bin-line"
 																class="text-base"
@@ -832,36 +929,34 @@ const shouldOpenCreateModal =
 			data-open={shouldOpenEditModal || shouldOpenCreateModal
 				? "true"
 				: "false"}
-			data-initial-award={editingAward ? JSON.stringify(editingAward) : ""}
+			data-initial-award={editingAward
+				? JSON.stringify(editingAward)
+				: ""}
 			data-should-open-edit={shouldOpenEditModal ? "true" : "false"}
 			data-should-open-create={shouldOpenCreateModal ? "true" : "false"}
 			data-current-year={String(currentYear)}
 			class:list={[
 				"fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto px-3 py-6 sm:px-5 sm:py-8",
 				{ hidden: !(shouldOpenEditModal || shouldOpenCreateModal) },
-			]}
-		>
+			]}>
 			<button
 				type="button"
 				class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
 				data-close-award-modal
-				aria-label="关闭弹窗"
-			>
+				aria-label="关闭弹窗">
 			</button>
 
 			<div
-				class="relative z-10 my-auto flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-white/10 bg-dark-800/95 shadow-2xl shadow-black/40 sm:max-h-[calc(100vh-4rem)]"
-			>
-				{/*
+				class="relative z-10 my-auto flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-white/10 bg-dark-800/95 shadow-2xl shadow-black/40 sm:max-h-[calc(100vh-4rem)]">
+				{
+					/*
 					弹窗文案以 #award-strings-bank 内各 id 节点正文的 text 为准（所见即所得，勿用 data- 再存一份）。
 					客户端打开弹窗、切换新建/编辑时也会读这些元素的 textContent。
-				*/}
-				<div
-					id="award-strings-bank"
-					class="sr-only"
-					aria-hidden="true"
-				>
-					<span id="award-s-create-title" class="block">新建荣誉</span>
+				*/
+				}
+				<div id="award-strings-bank" class="sr-only" aria-hidden="true">
+					<span id="award-s-create-title" class="block">新建荣誉</span
+					>
 					<span id="award-s-create-desc" class="block"
 						>上传荣誉图片或 PDF</span
 					>
@@ -869,38 +964,37 @@ const shouldOpenCreateModal =
 					<span id="award-s-edit-desc" class="block"
 						>更新当前荣誉的图片和分类信息。</span
 					>
-					<span id="award-s-image-label-new" class="block">图片 / PDF</span>
+					<span id="award-s-image-label-new" class="block"
+						>图片 / PDF</span
+					>
 					<span id="award-s-image-label-edit" class="block"
 						>图片 / PDF（如需更换再上传）</span
 					>
 					<span id="award-s-submit-new" class="block">新建</span>
 					<span id="award-s-submit-edit" class="block">保存修改</span>
 					<span id="award-s-ocr-new" class="block"
-						>上传荣誉图片或 PDF 后，这里会展示 OCR 提取出的完整文本。</span
+						>上传荣誉图片或 PDF 后，这里会展示 OCR
+						提取出的完整文本。</span
 					>
 					<span id="award-s-ocr-edit" class="block"
 						>如重新上传荣誉图片或 PDF，这里会展示新的 OCR 原文。</span
 					>
 				</div>
 				<div
-					class="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3 md:px-6"
-				>
+					class="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3 md:px-6">
 					<div>
 						<p
 							id="award-modal-tag"
-							class="text-sm uppercase tracking-[0.35em] text-primary-400"
-						>
+							class="text-sm uppercase tracking-[0.35em] text-primary-400">
 							Honor
 						</p>
 						<h2
 							id="award-modal-title"
-							class="mt-3 text-2xl font-semibold text-white"
-						>
+							class="mt-3 text-2xl font-semibold text-white">
 						</h2>
 						<p
 							id="award-modal-description"
-							class="mt-2 text-sm text-gray-400"
-						>
+							class="mt-2 text-sm text-gray-400">
 						</p>
 						<script
 							is:inline
@@ -919,8 +1013,13 @@ const shouldOpenCreateModal =
 								var descId = edit
 									? "award-s-edit-desc"
 									: "award-s-create-desc";
-								var mt = document.getElementById("award-modal-title");
-								var md = document.getElementById("award-modal-description");
+								var mt =
+									document.getElementById(
+										"award-modal-title",
+									);
+								var md = document.getElementById(
+									"award-modal-description",
+								);
 								if (mt) mt.textContent = t(titleId);
 								if (md) md.textContent = t(descId);
 							})(isEdit);
@@ -930,8 +1029,7 @@ const shouldOpenCreateModal =
 						type="button"
 						class="rounded-full p-2 text-gray-400 transition hover:bg-white/5 hover:text-white"
 						data-close-award-modal
-						aria-label="关闭"
-					>
+						aria-label="关闭">
 						<Icon name="ri:close-line" class="text-xl" />
 					</button>
 				</div>
@@ -941,15 +1039,15 @@ const shouldOpenCreateModal =
 					method="POST"
 					action="/api/admin/awards/save"
 					enctype="multipart/form-data"
-					class="flex min-h-0 flex-1 flex-col"
-				>
+					class="flex min-h-0 flex-1 flex-col">
 					<input id="award-id" type="hidden" name="id" />
 					<div
-						class="panel-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4 pt-3 md:px-6 md:pb-4 md:pt-4"
-					>
+						class="panel-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4 pt-3 md:px-6 md:pb-4 md:pt-4">
 						<div class="award-form__row award-form__row--primary">
 							<div>
-								<label for="award-competition-name" class="award-form__label">
+								<label
+									for="award-competition-name"
+									class="award-form__label">
 									名称
 								</label>
 								<input
@@ -962,7 +1060,9 @@ const shouldOpenCreateModal =
 							</div>
 
 							<div>
-								<label for="award-name" class="award-form__label">
+								<label
+									for="award-name"
+									class="award-form__label">
 									名次（可选）
 								</label>
 								<input
@@ -979,9 +1079,11 @@ const shouldOpenCreateModal =
 							<div
 								class="relative award-form__field--compact"
 								data-custom-select-root
-								data-select-submit-on-change="false"
-							>
-								<label for="award-type" class="award-form__label">类型</label>
+								data-select-submit-on-change="false">
+								<label
+									for="award-type"
+									class="award-form__label">类型</label
+								>
 								<input
 									id="award-type"
 									name="honorType"
@@ -989,7 +1091,8 @@ const shouldOpenCreateModal =
 									value="奖项"
 									data-select-input
 								/>
-								<details class="custom-select award-form__select">
+								<details
+									class="custom-select award-form__select">
 									<summary class="custom-select__trigger">
 										<span
 											class="custom-select__label is-selected"
@@ -1009,8 +1112,7 @@ const shouldOpenCreateModal =
 													class={`custom-select__option ${index === 0 ? "is-active" : ""}`}
 													data-select-option
 													data-value={type}
-													data-label={type}
-												>
+													data-label={type}>
 													<span>{type}</span>
 													<span
 														class="custom-select__check"
@@ -1024,7 +1126,10 @@ const shouldOpenCreateModal =
 							</div>
 
 							<div class="award-form__field--compact">
-								<label for="award-year" class="award-form__label">年份</label>
+								<label
+									for="award-year"
+									class="award-form__label">年份</label
+								>
 								<input
 									id="award-year"
 									name="awardYear"
@@ -1041,9 +1146,10 @@ const shouldOpenCreateModal =
 							<div
 								class="relative award-form__field--compact"
 								data-custom-select-root
-								data-select-submit-on-change="false"
-							>
-								<label for="award-level" class="award-form__label"
+								data-select-submit-on-change="false">
+								<label
+									for="award-level"
+									class="award-form__label"
 									>级别（可选）</label
 								>
 								<input
@@ -1053,7 +1159,8 @@ const shouldOpenCreateModal =
 									value=""
 									data-select-input
 								/>
-								<details class="custom-select award-form__select">
+								<details
+									class="custom-select award-form__select">
 									<summary class="custom-select__trigger">
 										<span
 											class="custom-select__label"
@@ -1071,11 +1178,11 @@ const shouldOpenCreateModal =
 											class="custom-select__option is-active"
 											data-select-option
 											data-value=""
-											data-label="级别"
-										>
+											data-label="级别">
 											<span>不填写</span>
-											<span class="custom-select__check" aria-hidden="true"
-											></span>
+											<span
+												class="custom-select__check"
+												aria-hidden="true"></span>
 										</button>
 										{
 											AWARD_LEVELS.map((level, index) => (
@@ -1084,8 +1191,7 @@ const shouldOpenCreateModal =
 													class="custom-select__option"
 													data-select-option
 													data-value={level}
-													data-label={level}
-												>
+													data-label={level}>
 													<span>{level}</span>
 													<span
 														class="custom-select__check"
@@ -1101,8 +1207,7 @@ const shouldOpenCreateModal =
 								<label
 									id="award-image-label"
 									for="award-image"
-									class="award-form__label"
-								>
+									class="award-form__label">
 									图片
 								</label>
 								<input
@@ -1114,20 +1219,22 @@ const shouldOpenCreateModal =
 								/>
 								<p
 									id="award-image-hint"
-									class="mt-3 hidden text-sm text-gray-400"
-								>
+									class="mt-3 hidden text-sm text-gray-400">
 									当前图片：
 									<a
 										id="award-image-link"
 										href="#"
 										target="_blank"
-										class="text-primary-300 hover:text-primary-200"></a>
+										class="text-primary-300 hover:text-primary-200"
+									></a>
 								</p>
 							</div>
 						</div>
 
 						<div>
-							<label for="award-ocr-text" class="award-form__label">
+							<label
+								for="award-ocr-text"
+								class="award-form__label">
 								OCR 原文
 							</label>
 							<textarea
@@ -1141,13 +1248,11 @@ const shouldOpenCreateModal =
 					</div>
 
 					<div
-						class="shrink-0 border-t border-white/10 bg-dark-900/40 px-4 py-3 md:px-6"
-					>
+						class="shrink-0 border-t border-white/10 bg-dark-900/40 px-4 py-3 md:px-6">
 						<button
 							id="award-submit-button"
 							type="submit"
-							class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600"
-						>
+							class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600">
 							<Icon
 								id="award-submit-icon"
 								name="ri:add-circle-line"
@@ -1162,8 +1267,7 @@ const shouldOpenCreateModal =
 
 		<div
 			id="award-delete-modal"
-			class="fixed inset-0 z-[210] hidden items-center justify-center p-4"
-		>
+			class="fixed inset-0 z-[210] hidden items-center justify-center p-4">
 			<button
 				type="button"
 				class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
@@ -1171,19 +1275,20 @@ const shouldOpenCreateModal =
 				aria-label="关闭删除确认"></button>
 
 			<div
-				class="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-dark-800/95 p-6 shadow-2xl shadow-black/40"
-			>
+				class="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-dark-800/95 p-6 shadow-2xl shadow-black/40">
 				<div class="flex items-start gap-4">
 					<div
-						class="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/10 text-red-300"
-					>
+						class="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-500/10 text-red-300">
 						<Icon name="ri:delete-bin-line" class="text-xl" />
 					</div>
 					<div class="flex-1">
-						<h2 class="text-xl font-semibold text-white">确认删除</h2>
+						<h2 class="text-xl font-semibold text-white">
+							确认删除
+						</h2>
 						<p class="mt-2 text-sm leading-6 text-gray-400">
 							删除后将无法恢复，请确认是否删除
-							<span id="delete-award-name" class="text-gray-200"></span>
+							<span id="delete-award-name" class="text-gray-200"
+							></span>
 							。
 						</p>
 					</div>
@@ -1194,16 +1299,14 @@ const shouldOpenCreateModal =
 						type="button"
 						class="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition-all hover:border-primary-400 hover:text-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
 						data-close-delete-modal
-						aria-label="取消删除"
-					>
+						aria-label="取消删除">
 						取消
 					</button>
 					<button
 						id="confirm-delete-button"
 						type="button"
 						class="rounded-2xl bg-red-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-						aria-label="确认删除"
-					>
+						aria-label="确认删除">
 						确定删除
 					</button>
 				</div>
@@ -1504,7 +1607,11 @@ const shouldOpenCreateModal =
 				rgb(248 113 113 / 0.22),
 				transparent 42%
 			),
-			linear-gradient(180deg, rgb(153 27 27 / 0.96), rgb(127 29 29 / 0.96));
+			linear-gradient(
+				180deg,
+				rgb(153 27 27 / 0.96),
+				rgb(127 29 29 / 0.96)
+			);
 		color: rgb(254 242 242);
 	}
 
@@ -1786,7 +1893,8 @@ const shouldOpenCreateModal =
 			)
 			.filter((line) => !isLikelySchoolLine(line, competitionKeywords))
 			.filter(
-				(line) => !/^(姓名|学号|班级|专业|院系|日期|时间|地点)/u.test(line),
+				(line) =>
+					!/^(姓名|学号|班级|专业|院系|日期|时间|地点)/u.test(line),
 			);
 
 		const directPatterns = [
@@ -1796,7 +1904,8 @@ const shouldOpenCreateModal =
 		];
 
 		for (const pattern of directPatterns) {
-			const directMatch = text.match(pattern) ?? compactText.match(pattern);
+			const directMatch =
+				text.match(pattern) ?? compactText.match(pattern);
 			if (directMatch?.[1]) {
 				return normalizeCompetitionName(directMatch[1]);
 			}
@@ -1820,7 +1929,10 @@ const shouldOpenCreateModal =
 					.replace(/(荣获|获得|取得|获评|被评为)/gu, "")
 					.trim(),
 			);
-			if (strippedLine.length >= 4 && competitionKeywords.test(strippedLine)) {
+			if (
+				strippedLine.length >= 4 &&
+				competitionKeywords.test(strippedLine)
+			) {
 				return strippedLine;
 			}
 		}
@@ -1915,9 +2027,11 @@ const shouldOpenCreateModal =
 	function analyzeOcrTextQuality(text: string) {
 		const compactText = normalizeCompactText(text);
 		const totalChars = compactText.length || 1;
-		const chineseChars = (compactText.match(/[\u4e00-\u9fff]/gu) ?? []).length;
-		const wordChars = (compactText.match(/[\u4e00-\u9fffA-Za-z0-9]/gu) ?? [])
+		const chineseChars = (compactText.match(/[\u4e00-\u9fff]/gu) ?? [])
 			.length;
+		const wordChars = (
+			compactText.match(/[\u4e00-\u9fffA-Za-z0-9]/gu) ?? []
+		).length;
 		const noisyChars = (
 			compactText.match(
 				/[^0-9A-Za-z\u4e00-\u9fff()（）【】\[\]《》“”"'‘’、，。！？；：:,.·\-+/#&]/gu,
@@ -1982,90 +2096,102 @@ const shouldOpenCreateModal =
 	}
 
 	function initCustomSelects() {
-		document.querySelectorAll("[data-custom-select-root]").forEach((root) => {
-			if (!(root instanceof HTMLElement)) {
-				return;
-			}
-
-			if (root.dataset.selectReady === "true") {
-				return;
-			}
-
-			const form = root.closest("form");
-			const details = root.querySelector("details");
-			const summary = root.querySelector("summary");
-			const input = root.querySelector("[data-select-input]");
-			const label = root.querySelector("[data-select-label]");
-			const options = root.querySelectorAll("[data-select-option]");
-
-			if (
-				!(form instanceof HTMLFormElement) ||
-				!(details instanceof HTMLDetailsElement) ||
-				!(summary instanceof HTMLElement) ||
-				!(input instanceof HTMLInputElement) ||
-				!(label instanceof HTMLElement) ||
-				options.length === 0
-			) {
-				return;
-			}
-
-			root.dataset.selectReady = "true";
-			let closeTimer: number | undefined;
-
-			root.addEventListener("mouseenter", () => {
-				if (closeTimer) {
-					clearTimeout(closeTimer);
-				}
-			});
-
-			root.addEventListener("mouseleave", () => {
-				closeTimer = window.setTimeout(() => {
-					details.removeAttribute("open");
-				}, 120);
-			});
-
-			summary.addEventListener("click", (event) => {
-				event.preventDefault();
-				if (closeTimer) {
-					clearTimeout(closeTimer);
+		document
+			.querySelectorAll("[data-custom-select-root]")
+			.forEach((root) => {
+				if (!(root instanceof HTMLElement)) {
+					return;
 				}
 
-				if (details.hasAttribute("open")) {
-					details.removeAttribute("open");
-				} else {
-					document
-						.querySelectorAll("[data-custom-select-root] details[open]")
-						.forEach((item) => {
-							if (item !== details) {
-								item.removeAttribute("open");
-							}
-						});
-					details.setAttribute("open", "");
+				if (root.dataset.selectReady === "true") {
+					return;
 				}
-			});
 
-			options.forEach((option) => {
-				option.addEventListener("click", () => {
-					const nextValue = option.getAttribute("data-value") ?? "";
-					const nextLabel =
-						option.getAttribute("data-label") ??
-						option.textContent?.trim() ??
-						"";
+				const form = root.closest("form");
+				const details = root.querySelector("details");
+				const summary = root.querySelector("summary");
+				const input = root.querySelector("[data-select-input]");
+				const label = root.querySelector("[data-select-label]");
+				const options = root.querySelectorAll("[data-select-option]");
 
-					input.value = nextValue;
-					label.textContent = nextLabel;
-					label.classList.toggle("is-selected", Boolean(nextValue));
-					input.dispatchEvent(new Event("change", { bubbles: true }));
+				if (
+					!(form instanceof HTMLFormElement) ||
+					!(details instanceof HTMLDetailsElement) ||
+					!(summary instanceof HTMLElement) ||
+					!(input instanceof HTMLInputElement) ||
+					!(label instanceof HTMLElement) ||
+					options.length === 0
+				) {
+					return;
+				}
 
-					options.forEach((item) => item.classList.remove("is-active"));
-					option.classList.add("is-active");
-					details.removeAttribute("open");
-					if (root.dataset.selectSubmitOnChange === "true") {
-						form.requestSubmit();
+				root.dataset.selectReady = "true";
+				let closeTimer: number | undefined;
+
+				root.addEventListener("mouseenter", () => {
+					if (closeTimer) {
+						clearTimeout(closeTimer);
 					}
 				});
+
+				root.addEventListener("mouseleave", () => {
+					closeTimer = window.setTimeout(() => {
+						details.removeAttribute("open");
+					}, 120);
+				});
+
+				summary.addEventListener("click", (event) => {
+					event.preventDefault();
+					if (closeTimer) {
+						clearTimeout(closeTimer);
+					}
+
+					if (details.hasAttribute("open")) {
+						details.removeAttribute("open");
+					} else {
+						document
+							.querySelectorAll(
+								"[data-custom-select-root] details[open]",
+							)
+							.forEach((item) => {
+								if (item !== details) {
+									item.removeAttribute("open");
+								}
+							});
+						details.setAttribute("open", "");
+					}
+				});
+
+				options.forEach((option) => {
+					option.addEventListener("click", () => {
+						const nextValue =
+							option.getAttribute("data-value") ?? "";
+						const nextLabel =
+							option.getAttribute("data-label") ??
+							option.textContent?.trim() ??
+							"";
+
+						input.value = nextValue;
+						label.textContent = nextLabel;
+						label.classList.toggle(
+							"is-selected",
+							Boolean(nextValue),
+						);
+						input.dispatchEvent(
+							new Event("change", { bubbles: true }),
+						);
+
+						options.forEach((item) =>
+							item.classList.remove("is-active"),
+						);
+						option.classList.add("is-active");
+						details.removeAttribute("open");
+						if (root.dataset.selectSubmitOnChange === "true") {
+							form.requestSubmit();
+						}
+					});
+				});
 			});
-		});
 	}
 
 	function initAwardAdmin() {
@@ -2080,14 +2206,18 @@ const shouldOpenCreateModal =
 		const awardNameInput = document.getElementById("award-name");
 		const yearInput = document.getElementById("award-year");
 		const levelInput = document.getElementById("award-level");
-		const levelSelectRoot = levelInput?.closest("[data-custom-select-root]");
+		const levelSelectRoot = levelInput?.closest(
+			"[data-custom-select-root]",
+		);
 		const imageInput = document.getElementById("award-image");
 		const imageLabel = document.getElementById("award-image-label");
 		const imageHint = document.getElementById("award-image-hint");
 		const imageLink = document.getElementById("award-image-link");
 		const ocrTextInput = document.getElementById("award-ocr-text");
 		const modalTitle = document.getElementById("award-modal-title");
-		const modalDescription = document.getElementById("award-modal-description");
+		const modalDescription = document.getElementById(
+			"award-modal-description",
+		);
 		const submitText = document.getElementById("award-submit-text");
 		const submitIcon = document.getElementById("award-submit-icon");
 		const deleteModal = document.getElementById("award-delete-modal");
@@ -2175,7 +2305,9 @@ const shouldOpenCreateModal =
 				return null;
 			}
 		};
-		const initialEditingAward = parseJsonData(modal.dataset.initialAward ?? "");
+		const initialEditingAward = parseJsonData(
+			modal.dataset.initialAward ?? "",
+		);
 		const shouldOpenEditModal = parseBooleanData(
 			modal.dataset.shouldOpenEdit ?? "false",
 		);
@@ -2203,7 +2335,10 @@ const shouldOpenCreateModal =
 		};
 
 		const setOcrProgress = (value: number, status: string): void => {
-			const normalizedValue = Math.max(0, Math.min(100, Math.round(value)));
+			const normalizedValue = Math.max(
+				0,
+				Math.min(100, Math.round(value)),
+			);
 			setOcrDisplay(`${status}\n\n进度：${normalizedValue}%`, "loading");
 			ocrTextInput.style.backgroundImage = `linear-gradient(to right, rgba(34, 211, 238, 0.22) 0%, rgba(34, 211, 238, 0.22) ${normalizedValue}%, rgba(15, 23, 42, 0.18) ${normalizedValue}%, rgba(15, 23, 42, 0.18) 100%)`;
 			ocrTextInput.style.backgroundRepeat = "no-repeat";
@@ -2371,10 +2506,14 @@ const shouldOpenCreateModal =
 					});
 
 					request.upload.addEventListener("progress", (event) => {
-						if (jobId !== currentOcrJob || !event.lengthComputable) {
+						if (
+							jobId !== currentOcrJob ||
+							!event.lengthComputable
+						) {
 							return;
 						}
-						const percent = 5 + Math.round((event.loaded / event.total) * 30);
+						const percent =
+							5 + Math.round((event.loaded / event.total) * 30);
 						setOcrProgress(percent, "正在上传荣誉文件...");
 					});
 
@@ -2389,7 +2528,8 @@ const shouldOpenCreateModal =
 					request.addEventListener("load", () => {
 						finishRequest();
 						const payload =
-							request.response && typeof request.response === "object"
+							request.response &&
+							typeof request.response === "object"
 								? request.response
 								: {};
 						if (request.status >= 200 && request.status < 300) {
@@ -2398,7 +2538,8 @@ const shouldOpenCreateModal =
 						}
 						reject(
 							new Error(
-								payload?.error || "自动解析失败，请手动填写表单后提交。",
+								payload?.error ||
+									"自动解析失败，请手动填写表单后提交。",
 							),
 						);
 					});
@@ -2448,7 +2589,8 @@ const shouldOpenCreateModal =
 					const normalizedCandidate = {
 						label: candidate.label ?? "",
 						parsed,
-						averageConfidence: Number(candidate.averageConfidence) || 0,
+						averageConfidence:
+							Number(candidate.averageConfidence) || 0,
 						score: scoreOcrCandidate(
 							parsed,
 							Number(candidate.averageConfidence) || 0,
@@ -2465,7 +2607,8 @@ const shouldOpenCreateModal =
 				}
 
 				const parsed =
-					bestCandidate?.parsed ?? extractAwardInfoFromTexts(fallbackTexts);
+					bestCandidate?.parsed ??
+					extractAwardInfoFromTexts(fallbackTexts);
 				setOcrProgress(96, "正在回填识别结果...");
 
 				if (!parsed.rawText) {
@@ -2627,9 +2770,12 @@ const shouldOpenCreateModal =
 						fillFormForEdit({
 							id: Number(idValue),
 							honorType: openButton.dataset.awardType ?? "奖项",
-							competitionName: openButton.dataset.awardCompetitionName ?? "",
+							competitionName:
+								openButton.dataset.awardCompetitionName ?? "",
 							awardName: openButton.dataset.awardName ?? "",
-							awardYear: Number(openButton.dataset.awardYear ?? currentYear),
+							awardYear: Number(
+								openButton.dataset.awardYear ?? currentYear,
+							),
 							awardLevel: openButton.dataset.awardLevel ?? "",
 							imageName: openButton.dataset.awardImageName ?? "",
 							imageUrl: openButton.dataset.awardImageUrl ?? "#",
@@ -2680,7 +2826,10 @@ const shouldOpenCreateModal =
 				) {
 					closeDeleteModal();
 				}
-				if (event.key === "Escape" && !modal.classList.contains("hidden")) {
+				if (
+					event.key === "Escape" &&
+					!modal.classList.contains("hidden")
+				) {
 					closeModal();
 				}
 			},
@@ -2735,37 +2884,42 @@ const shouldOpenCreateModal =
 				keywordInput.value = url.searchParams.get("q") ?? "";
 			}
 
-			form.querySelectorAll("[data-custom-select-root]").forEach((root) => {
-				const input = root.querySelector("[data-select-input]");
-				const label = root.querySelector("[data-select-label]");
-				const options = root.querySelectorAll("[data-select-option]");
-
-				if (
-					!(input instanceof HTMLInputElement) ||
-					!(label instanceof HTMLElement)
-				) {
-					return;
-				}
-
-				const nextValue = url.searchParams.get(input.name) ?? "";
-				input.value = nextValue;
-
-				const activeOption = Array.from(options).find(
-					(option) => option.getAttribute("data-value") === nextValue,
-				);
-				label.textContent =
-					activeOption?.getAttribute("data-label") ??
-					label.dataset.placeholder ??
-					"";
-				label.classList.toggle("is-selected", Boolean(nextValue));
-
-				options.forEach((option) => {
-					option.classList.toggle(
-						"is-active",
-						option.getAttribute("data-value") === nextValue,
+			form.querySelectorAll("[data-custom-select-root]").forEach(
+				(root) => {
+					const input = root.querySelector("[data-select-input]");
+					const label = root.querySelector("[data-select-label]");
+					const options = root.querySelectorAll(
+						"[data-select-option]",
 					);
-				});
-			});
+
+					if (
+						!(input instanceof HTMLInputElement) ||
+						!(label instanceof HTMLElement)
+					) {
+						return;
+					}
+
+					const nextValue = url.searchParams.get(input.name) ?? "";
+					input.value = nextValue;
+
+					const activeOption = Array.from(options).find(
+						(option) =>
+							option.getAttribute("data-value") === nextValue,
+					);
+					label.textContent =
+						activeOption?.getAttribute("data-label") ??
+						label.dataset.placeholder ??
+						"";
+					label.classList.toggle("is-selected", Boolean(nextValue));
+
+					options.forEach((option) => {
+						option.classList.toggle(
+							"is-active",
+							option.getAttribute("data-value") === nextValue,
+						);
+					});
+				},
+			);
 		};
 
 		const refreshResults = async (
@@ -2783,16 +2937,20 @@ const shouldOpenCreateModal =
 				});
 
 				if (!response.ok) {
-					window.location.href = typeof url === "string" ? url : url.toString();
+					window.location.href =
+						typeof url === "string" ? url : url.toString();
 					return;
 				}
 
 				const html = await response.text();
 				const doc = new DOMParser().parseFromString(html, "text/html");
-				const nextResults = doc.querySelector("[data-admin-awards-results]");
+				const nextResults = doc.querySelector(
+					"[data-admin-awards-results]",
+				);
 
 				if (!(nextResults instanceof HTMLElement)) {
-					window.location.href = typeof url === "string" ? url : url.toString();
+					window.location.href =
+						typeof url === "string" ? url : url.toString();
 					return;
 				}
 
@@ -2888,7 +3046,10 @@ const shouldOpenCreateModal =
 		};
 
 		const removeToast = (toast: HTMLElement): void => {
-			if (!(toast instanceof HTMLElement) || toast.dataset.leaving === "true") {
+			if (
+				!(toast instanceof HTMLElement) ||
+				toast.dataset.leaving === "true"
+			) {
 				return;
 			}
 
@@ -2973,9 +3134,13 @@ const shouldOpenCreateModal =
 			source.dataset.toastConsumed = "true";
 			showToast({
 				message: source.textContent?.trim() ?? "",
-				variant: source.dataset.toastVariant === "error" ? "error" : "success",
+				variant:
+					source.dataset.toastVariant === "error"
+						? "error"
+						: "success",
 				title: source.dataset.toastTitle ?? undefined,
-				duration: Number(source.dataset.toastDuration ?? "3000") || 3000,
+				duration:
+					Number(source.dataset.toastDuration ?? "3000") || 3000,
 			});
 		});
 

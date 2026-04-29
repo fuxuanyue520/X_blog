@@ -1,5 +1,6 @@
 ---
 import { getAuthenticatedAdmin } from "@/lib/auth";
+import { homeUrlWithAdminLoginPrompt } from "@/lib/admin-login-redirect";
 
 export const prerender = false;
 
@@ -8,5 +9,5 @@ const admin = await getAuthenticatedAdmin(Astro);
 if (admin) {
 	return Astro.redirect("/admin");
 }
-return Astro.redirect("/?login=1");
+return Astro.redirect(homeUrlWithAdminLoginPrompt("/admin/documents"));
 ---

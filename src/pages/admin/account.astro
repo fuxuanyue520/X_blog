@@ -3,6 +3,7 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import AdminShell from "@/components/admin/AdminShell.astro";
 import AdminNotificationStyles from "@/components/admin/AdminNotificationStyles.astro";
 import { getAuthenticatedAdmin } from "@/lib/auth";
+import { homeUrlPromptLoginFromAdminAttempt } from "@/lib/admin-login-redirect";
 import { Icon } from "astro-icon/components";
 
 export const prerender = false;
@@ -10,7 +11,7 @@ export const prerender = false;
 const admin = await getAuthenticatedAdmin(Astro);
 
 if (!admin) {
-	return Astro.redirect("/?login=1");
+	return Astro.redirect(homeUrlPromptLoginFromAdminAttempt(Astro.url));
 }
 ---
 
@@ -100,5 +101,8 @@ if (!admin) {
 	import { mountAccountChangePasswordForm } from "@/scripts/account-change-password";
 
 	mountAccountChangePasswordForm();
-	document.addEventListener("astro:page-load", mountAccountChangePasswordForm);
+	document.addEventListener(
+		"astro:page-load",
+		mountAccountChangePasswordForm,
+	);
 </script>

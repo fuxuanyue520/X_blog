@@ -2,6 +2,7 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import AdminShell from "@/components/admin/AdminShell.astro";
 import { getAuthenticatedAdmin } from "@/lib/auth";
+import { homeUrlPromptLoginFromAdminAttempt } from "@/lib/admin-login-redirect";
 import {
 	ARTICLE_CATEGORIES,
 	getAdminArticleBySlug,
@@ -14,7 +15,7 @@ export const prerender = false;
 const admin = await getAuthenticatedAdmin(Astro);
 
 if (!admin) {
-	return Astro.redirect("/?login=1");
+	return Astro.redirect(homeUrlPromptLoginFromAdminAttempt(Astro.url));
 }
 
 const status = Astro.url.searchParams.get("status") ?? "";
@@ -341,8 +342,7 @@ const closeModalUrl = buildAdminLink({
 										? "border-primary-400/50 shadow-[0_0_0_1px_rgba(34,211,238,0.3)]"
 										: "",
 								]}>
-								<div
-									class="flex h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-dark-950 ring-1 ring-white/10 md:mx-0">
+								<div class="flex h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-dark-950 ring-1 ring-white/10 md:mx-0">
 									{document.coverImage ? (
 										<img
 											src={document.coverImage}
@@ -1375,7 +1375,11 @@ const closeModalUrl = buildAdminLink({
 				rgb(248 113 113 / 0.22),
 				transparent 42%
 			),
-			linear-gradient(180deg, rgb(153 27 27 / 0.96), rgb(127 29 29 / 0.96));
+			linear-gradient(
+				180deg,
+				rgb(153 27 27 / 0.96),
+				rgb(127 29 29 / 0.96)
+			);
 		color: rgb(254 242 242);
 	}
 
@@ -1859,7 +1863,10 @@ const closeModalUrl = buildAdminLink({
 		};
 
 		const removeToast = (toast: HTMLElement): void => {
-			if (!(toast instanceof HTMLElement) || toast.dataset.leaving === "true") {
+			if (
+				!(toast instanceof HTMLElement) ||
+				toast.dataset.leaving === "true"
+			) {
 				return;
 			}
 
@@ -1944,9 +1951,13 @@ const closeModalUrl = buildAdminLink({
 			source.dataset.toastConsumed = "true";
 			showToast({
 				message: source.textContent?.trim() ?? "",
-				variant: source.dataset.toastVariant === "error" ? "error" : "success",
+				variant:
+					source.dataset.toastVariant === "error"
+						? "error"
+						: "success",
 				title: source.dataset.toastTitle ?? undefined,
-				duration: Number(source.dataset.toastDuration ?? "3000") || 3000,
+				duration:
+					Number(source.dataset.toastDuration ?? "3000") || 3000,
 			});
 		});
 

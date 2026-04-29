@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getAuthenticatedAdmin } from "@/lib/auth";
+import { loginRedirectForUnauthorizedApiRequest } from "@/lib/admin-login-redirect";
 import { deleteAwardById, getAwardById } from "@/lib/awards";
 
 export const prerender = false;
@@ -17,7 +18,9 @@ export const POST: APIRoute = async (context) => {
 	const admin = await getAuthenticatedAdmin(context);
 
 	if (!admin) {
-		return redirect("/?login=1");
+		return redirect(
+			loginRedirectForUnauthorizedApiRequest(context.request, "/admin/awards"),
+		);
 	}
 
 	const formData = await context.request.formData();

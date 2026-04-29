@@ -1,4 +1,5 @@
 import { showAdminToast } from "@/scripts/admin-toast";
+import { homeUrlWithAdminLoginPrompt } from "@/lib/admin-login-redirect";
 
 const OK_REDIRECT = "/admin/account?auth=password_ok";
 const TOAST_ERR_MS = 4000;
@@ -70,7 +71,11 @@ async function handleSubmit(form: HTMLFormElement) {
 		});
 
 		if (response.status === 401) {
-			window.location.assign("/?login=1");
+			window.location.assign(
+				homeUrlWithAdminLoginPrompt(
+					`${window.location.pathname}${window.location.search}${window.location.hash}`,
+				),
+			);
 			return;
 		}
 

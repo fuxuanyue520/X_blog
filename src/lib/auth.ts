@@ -170,6 +170,16 @@ export async function getAuthenticatedAdmin(
 	} satisfies AuthenticatedAdmin;
 }
 
+function adminSessionCookieSecure(): boolean {
+	const explicit = import.meta.env.PUBLIC_SESSION_COOKIE_SECURE;
+	if (explicit === "false") return false;
+	if (explicit === "true") return true;
+	const site = import.meta.env.SITE;
+	if (typeof site === "string" && site.startsWith("https://")) return true;
+	// 未显式配置时：仅当 astro.config 中 site 为 https 时使用 Secure，避免纯 HTTP 生产环境丢弃会话 Cookie
+	return false;
+}
+
 export function setAdminSessionCookie(
 	cookies: CookieStore,
 	token: string,
@@ -178,7 +188,7 @@ export function setAdminSessionCookie(
 	cookies.set(ADMIN_SESSION_COOKIE_NAME, token, {
 		httpOnly: true,
 		sameSite: "lax",
-		secure: import.meta.env.PROD,
+		secure: adminSessionCookieSecure(),
 		path: "/",
 		expires: new Date(expiresAt),
 	});

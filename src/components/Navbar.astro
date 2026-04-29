@@ -105,6 +105,12 @@ const errorCode = Astro.url.searchParams.get("error") ?? "";
 const errorMessage = errorMessages[errorCode] ?? "";
 const shouldOpenLoginModal =
 	Astro.url.searchParams.get("login") === "1" || Boolean(errorMessage);
+const redirectToParamRaw =
+	Astro.url.searchParams.get("redirectTo")?.trim() ?? "";
+const loginFormRedirectTarget =
+	redirectToParamRaw.startsWith("/") && !redirectToParamRaw.startsWith("//")
+		? redirectToParamRaw
+		: currentPathWithSearch;
 ---
 
 <nav
@@ -365,7 +371,7 @@ const shouldOpenLoginModal =
 		</div>
 
 		<form id="login-form" class="space-y-5" onsubmit="return false;">
-			<input type="hidden" name="redirectTo" value={currentPathWithSearch} />
+			<input type="hidden" name="redirectTo" value={loginFormRedirectTarget} />
 
 			<div>
 				<label
@@ -869,11 +875,17 @@ const shouldOpenLoginModal =
 		}
 
 		if (loginModal) {
+			const loginForm = document.getElementById("login-form");
+			const loginSubmitBtn = document.getElementById("login-submit-btn");
+			const loginErrorMessage = document.getElementById(
+				"login-error-message",
+			);
+
 			const openModal = () => {
 				loginModal.classList.remove("hidden");
 				document.body.style.overflow = "hidden";
 				// 打开弹窗时允许自动填充
-				loginForm.removeAttribute("autocomplete");
+				loginForm?.removeAttribute("autocomplete");
 				setTimeout(() => usernameInput?.focus(), 0);
 			};
 
@@ -885,23 +897,34 @@ const shouldOpenLoginModal =
 				hideLoginError();
 
 				// 清空表单内容
-				const usernameInput = document.getElementById(
+				const usernameInputClose = document.getElementById(
 					"nav-login-username",
 				) as HTMLInputElement;
-				const passwordInput = document.getElementById(
+				const passwordInputClose = document.getElementById(
 					"nav-login-password",
 				) as HTMLInputElement;
-				if (usernameInput) usernameInput.value = "";
-				if (passwordInput) passwordInput.value = "";
+				if (usernameInputClose) usernameInputClose.value = "";
+				if (passwordInputClose) passwordInputClose.value = "";
 
 				// 重置 autocomplete 属性，允许下次自动填充
-				loginForm.removeAttribute("autocomplete");
+				loginForm?.removeAttribute("autocomplete");
 
-				// 只清除 login 和 error 参数，保留 auth 和 pwdErr 参数用于显示 toast 消息
+				// 只清除 login / error / redirectTo，保留 auth 和 pwdErr 用于 toast
 				const url = new URL(window.location.href);
-				if (url.searchParams.has("login") || url.searchParams.has("error")) {
+				let cleared = false;
+				if (url.searchParams.has("login")) {
 					url.searchParams.delete("login");
+					cleared = true;
+				}
+				if (url.searchParams.has("error")) {
 					url.searchParams.delete("error");
+					cleared = true;
+				}
+				if (url.searchParams.has("redirectTo")) {
+					url.searchParams.delete("redirectTo");
+					cleared = true;
+				}
+				if (cleared) {
 					window.history.replaceState(
 						{},
 						"",
@@ -950,10 +973,6 @@ const shouldOpenLoginModal =
 			};
 
 			// 处理登录表单提交
-			const loginForm = document.getElementById("login-form");
-			const loginSubmitBtn = document.getElementById("login-submit-btn");
-			const loginErrorMessage = document.getElementById("login-error-message");
-
 			if (loginForm && loginSubmitBtn && loginErrorMessage) {
 				// 点击登录按钮提交
 				loginSubmitBtn.addEventListener("click", async () => {

@@ -4,6 +4,7 @@ import {
 	createAdminSession,
 	setAdminSessionCookie,
 } from "@/lib/auth";
+import { homeUrlWithAdminLoginPrompt } from "@/lib/admin-login-redirect";
 
 function normalizeRedirectTarget(value: FormDataEntryValue | null) {
 	const target = String(value ?? "").trim();
@@ -15,12 +16,16 @@ function normalizeRedirectTarget(value: FormDataEntryValue | null) {
 	return target;
 }
 
-function withLoginError(target: string, error: string) {
-	const url = new URL(target, "http://localhost");
-	url.searchParams.set("login", "1");
-	url.searchParams.set("error", error);
-
-	return `${url.pathname}${url.search}`;
+/** 登录失败时也必须留在首页带弹窗，不能跳到 /admin?...（会再次触发未登录重定向）。 */
+function withLoginError(redirectAfterLogin: string, error: string) {
+	const safe = normalizeRedirectTarget(redirectAfterLogin as FormDataEntryValue);
+	const u = new URL("/", "http://localhost");
+	u.searchParams.set("login", "1");
+	u.searchParams.set("error", error);
+	if (safe !== "/") {
+		u.searchParams.set("redirectTo", safe);
+	}
+	return `${u.pathname}${u.search}`;
 }
 
 function withLoginSuccess(target: string) {
@@ -53,5 +58,5 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 };
 
 export const GET: APIRoute = async ({ redirect }) => {
-	return redirect("/?login=1");
+	return redirect(homeUrlWithAdminLoginPrompt("/admin/documents"));
 };
