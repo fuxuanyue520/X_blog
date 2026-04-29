@@ -61,9 +61,15 @@ export async function createAdminSession(userId: number) {
 	const db = await getDb();
 	const token = createSessionToken();
 	const tokenHash = hashSessionToken(token);
-	const expiresAt = new Date(Date.now() + SESSION_DURATION_MS).toISOString();
-	const createdAt = new Date().toISOString();
-	const lastActivityAt = new Date().toISOString();
+	const expiresAt = new Date(Date.now() + SESSION_DURATION_MS)
+		.toISOString()
+		.replace("T", " ")
+		.substring(0, 19);
+	const createdAt = new Date().toISOString().replace("T", " ").substring(0, 19);
+	const lastActivityAt = new Date()
+		.toISOString()
+		.replace("T", " ")
+		.substring(0, 19);
 
 	await db.execute({
 		sql: `
@@ -129,9 +135,13 @@ export async function getAuthenticatedAdmin(
 	}
 
 	// 更新最后活动时间
+	const newLastActivity = new Date()
+		.toISOString()
+		.replace("T", " ")
+		.substring(0, 19);
 	await db.execute({
 		sql: "UPDATE admin_sessions SET last_activity_at = ? WHERE token_hash = ?",
-		args: [new Date().toISOString(), tokenHash],
+		args: [newLastActivity, tokenHash],
 	});
 
 	return {
