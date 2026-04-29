@@ -177,6 +177,87 @@ async function ensureMissingTables(db: AppDbClient) {
 
 async function initializeDatabase() {
 	const db = await createDatabaseClient();
+	
+	// 检查表是否存在，不存在则创建
+	const existingTablesResult = await db.execute({
+		sql: `
+			SELECT table_name
+			FROM information_schema.tables
+			WHERE table_schema = DATABASE()
+		`,
+	});
+	
+	const existingTables = new Set(
+		existingTablesResult.rows.map((row) =>
+			String(row.table_name ?? row.TABLE_NAME ?? "").toLowerCase(),
+		),
+	);
+	
+	// 只创建不存在的表
+	const TABLE_SCHEMAS = {
+		admin_users: `
+			CREATE TABLE IF NOT EXISTS admin_users (
+				id BIGINT PRIMARY KEY AUTO_INCREMENT,
+				username VARCHAR(128) NOT NULL UNIQUE,
+				password_hash VARCHAR(512) NOT NULL,
+				password_salt VARCHAR(512) NOT NULL,
+				created_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+				updated_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+			)
+		`,
+		admin_sessions: `
+			CREATE TABLE IF NOT EXISTS admin_sessions (
+				id BIGINT PRIMARY KEY AUTO_INCREMENT,
+				user_id BIGINT NOT NULL,
+				token_hash VARCHAR(256) NOT NULL UNIQUE,
+				expires_at VARCHAR(40) NOT NULL,
+				created_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+				FOREIGN KEY(user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+			)
+		`,
+		award_certificates: `
+			CREATE TABLE IF NOT EXISTS award_certificates (
+				id BIGINT PRIMARY KEY AUTO_INCREMENT,
+				title VARCHAR(255) NOT NULL,
+				honor_type VARCHAR(32) NOT NULL DEFAULT '奖项',
+				competition_name VARCHAR(255) NOT NULL DEFAULT '',
+				award_name VARCHAR(255) NOT NULL DEFAULT '',
+				award_year INT NOT NULL,
+				award_level VARCHAR(64) NOT NULL,
+				description TEXT,
+				image_name VARCHAR(255) NOT NULL,
+				image_mime_type VARCHAR(128) NOT NULL,
+				image_base64 LONGTEXT NOT NULL,
+				created_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+				updated_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+			)
+		`,
+		blog_articles: `
+			CREATE TABLE IF NOT EXISTS blog_articles (
+				id BIGINT PRIMARY KEY AUTO_INCREMENT,
+				slug VARCHAR(255) NOT NULL UNIQUE,
+				title VARCHAR(255) NOT NULL,
+				description TEXT NOT NULL,
+				category VARCHAR(32) NOT NULL,
+				tags TEXT NOT NULL,
+				published_at VARCHAR(40) NOT NULL,
+				article_updated_at VARCHAR(40),
+				cover_image VARCHAR(512),
+				is_pinned TINYINT(1) NOT NULL DEFAULT 0,
+				draft TINYINT(1) NOT NULL DEFAULT 0,
+				body LONGTEXT NOT NULL,
+				created_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+				updated_at VARCHAR(40) NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+			)
+		`,
+	};
+	
+	for (const [tableName, createSql] of Object.entries(TABLE_SCHEMAS)) {
+		if (!existingTables.has(tableName.toLowerCase())) {
+			await db.execute(createSql);
+		}
+	}
+	
 	return db;
 }
 
