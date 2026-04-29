@@ -18,11 +18,12 @@
             <source src="/videos/background.mp4" type="video/mp4" />
         </video>
         <div class="absolute inset-0 bg-gradient-to-br from-purple-900/20 to-blue-900/20"></div>
-        <div class="absolute inset-0 bg-gradient-to-b from-transparent via-dark-900/10 to-dark-900"></div>
+        <!-- 优化底部渐变，让过渡更自然 -->
+        <div class="absolute inset-0 bg-gradient-to-b from-transparent via-dark-900/20 to-dark-900/90"></div>
     </div>
     
     <!-- Content -->
-    <div class="absolute bottom-0 left-0 w-full p-6 md:p-10 bg-gradient-to-t from-dark-900 via-dark-900/60 to-transparent pt-24 z-10">
+    <div class="absolute bottom-0 left-0 w-full p-6 md:p-10 bg-gradient-to-t from-dark-900 via-dark-900/80 to-transparent pt-32 z-10">
         <div class="max-w-[1600px] mx-auto flex flex-col justify-end h-full">
              <h1 class="text-3xl md:text-5xl font-serif font-bold text-white mb-2 drop-shadow-xl tracking-wide translate-y-4 animate-fade-in-up">
                 在学习与迷茫之间
