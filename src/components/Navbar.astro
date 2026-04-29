@@ -97,6 +97,8 @@ const logoutRedirectTo = Astro.url.pathname.startsWith("/admin")
 	: currentPathWithSearch;
 const errorMessages: Record<string, string> = {
 	missing_fields: "请输入用户名和密码。",
+	user_not_found: "用户名不存在。",
+	wrong_password: "密码错误。",
 	invalid_credentials: "用户名或密码错误。",
 };
 const errorCode = Astro.url.searchParams.get("error") ?? "";
@@ -356,15 +358,13 @@ const shouldOpenLoginModal =
 			</p>
 		</div>
 
-		{
-			errorMessage && (
-				<div class="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-					{errorMessage}
-				</div>
-			)
-		}
+		<div
+			id="login-error-message"
+			class="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200 hidden"
+		>
+		</div>
 
-		<form method="POST" action="/api/admin/login" class="space-y-5">
+		<form id="login-form" class="space-y-5" onsubmit="return false;">
 			<input type="hidden" name="redirectTo" value={currentPathWithSearch} />
 
 			<div>
@@ -392,20 +392,35 @@ const shouldOpenLoginModal =
 				>
 					密码
 				</label>
-				<input
-					id="nav-login-password"
-					name="password"
-					type="password"
-					autocomplete="current-password"
-					required
-					class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
-					placeholder="请输入密码"
-				/>
+				<div class="relative">
+					<input
+						id="nav-login-password"
+						name="password"
+						type="password"
+						autocomplete="current-password"
+						required
+						class="w-full rounded-2xl border border-white/10 bg-dark-900/80 px-4 py-3 pr-12 text-gray-100 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20"
+						placeholder="请输入密码"
+					/>
+					<button
+						type="button"
+						id="toggle-password-btn"
+						class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
+						aria-label="切换密码可见性"
+					>
+						<Icon
+							name="ri:eye-line"
+							class="text-xl"
+							id="toggle-password-icon"
+						/>
+					</button>
+				</div>
 			</div>
 
 			<button
-				type="submit"
-				class="w-full rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600"
+				type="button"
+				id="login-submit-btn"
+				class="w-full rounded-2xl bg-primary-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
 			>
 				登录
 			</button>
@@ -702,27 +717,37 @@ const shouldOpenLoginModal =
 			}
 
 			source.dataset.authToastConsumed = "true";
+			const message = source.textContent?.trim() ?? "";
+			const variant =
+				source.dataset.authToastVariant === "error" ? "error" : "success";
+			const title = source.dataset.authToastTitle ?? undefined;
+			const duration =
+				Number(source.dataset.authToastDuration ?? "3000") || 3000;
+
 			showToast({
-				message: source.textContent?.trim() ?? "",
-				variant:
-					source.dataset.authToastVariant === "error" ? "error" : "success",
-				title: source.dataset.authToastTitle ?? undefined,
-				duration: Number(source.dataset.authToastDuration ?? "3000") || 3000,
+				message,
+				variant,
+				title,
+				duration,
 			});
 		});
 
+		// 延迟清除 URL 参数，确保 toast 已经显示
 		const currentUrl = new URL(window.location.href);
 		if (
 			currentUrl.searchParams.has("auth") ||
 			currentUrl.searchParams.has("pwdErr")
 		) {
-			currentUrl.searchParams.delete("auth");
-			currentUrl.searchParams.delete("pwdErr");
-			window.history.replaceState(
-				{},
-				"",
-				`${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
-			);
+			// 等待 toast 显示后再清除 URL 参数
+			setTimeout(() => {
+				currentUrl.searchParams.delete("auth");
+				currentUrl.searchParams.delete("pwdErr");
+				window.history.replaceState(
+					{},
+					"",
+					`${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+				);
+			}, 100);
 		}
 	}
 
@@ -762,9 +787,13 @@ const shouldOpenLoginModal =
 				"Cache-Control": "no-cache",
 			},
 		})
-			.then((response) => {
+			.then(async (response) => {
 				if (!response.ok) return null;
-				return response.json();
+				try {
+					return await response.json();
+				} catch {
+					return null;
+				}
 			})
 			.then((session) => {
 				const authenticated = Boolean(session?.authenticated);
@@ -806,6 +835,10 @@ const shouldOpenLoginModal =
 					loginModal.classList.add("hidden");
 					document.body.style.overflow = "";
 				}
+
+				if (authenticated && usernameInput) {
+					usernameInput.value = "";
+				}
 			})
 			.catch(() => {
 				// 忽略错误
@@ -839,6 +872,8 @@ const shouldOpenLoginModal =
 			const openModal = () => {
 				loginModal.classList.remove("hidden");
 				document.body.style.overflow = "hidden";
+				// 打开弹窗时允许自动填充
+				loginForm.removeAttribute("autocomplete");
 				setTimeout(() => usernameInput?.focus(), 0);
 			};
 
@@ -846,17 +881,27 @@ const shouldOpenLoginModal =
 				loginModal.classList.add("hidden");
 				document.body.style.overflow = "";
 
+				// 清除错误信息
+				hideLoginError();
+
+				// 清空表单内容
+				const usernameInput = document.getElementById(
+					"nav-login-username",
+				) as HTMLInputElement;
+				const passwordInput = document.getElementById(
+					"nav-login-password",
+				) as HTMLInputElement;
+				if (usernameInput) usernameInput.value = "";
+				if (passwordInput) passwordInput.value = "";
+
+				// 重置 autocomplete 属性，允许下次自动填充
+				loginForm.removeAttribute("autocomplete");
+
+				// 只清除 login 和 error 参数，保留 auth 和 pwdErr 参数用于显示 toast 消息
 				const url = new URL(window.location.href);
-				if (
-					url.searchParams.has("login") ||
-					url.searchParams.has("error") ||
-					url.searchParams.has("auth") ||
-					url.searchParams.has("pwdErr")
-				) {
+				if (url.searchParams.has("login") || url.searchParams.has("error")) {
 					url.searchParams.delete("login");
 					url.searchParams.delete("error");
-					url.searchParams.delete("auth");
-					url.searchParams.delete("pwdErr");
 					window.history.replaceState(
 						{},
 						"",
@@ -887,7 +932,11 @@ const shouldOpenLoginModal =
 
 			closeModalButtons.forEach((button) => {
 				if (button instanceof HTMLElement) {
-					button.onclick = closeModal;
+					button.onclick = (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						closeModal();
+					};
 				}
 			});
 
@@ -899,6 +948,176 @@ const shouldOpenLoginModal =
 					closeModal();
 				}
 			};
+
+			// 处理登录表单提交
+			const loginForm = document.getElementById("login-form");
+			const loginSubmitBtn = document.getElementById("login-submit-btn");
+			const loginErrorMessage = document.getElementById("login-error-message");
+
+			if (loginForm && loginSubmitBtn && loginErrorMessage) {
+				// 点击登录按钮提交
+				loginSubmitBtn.addEventListener("click", async () => {
+					await handleLogin();
+				});
+
+				// 密码框按回车提交
+				const passwordInput = document.getElementById(
+					"nav-login-password",
+				) as HTMLInputElement;
+				if (passwordInput) {
+					passwordInput.addEventListener("keydown", (e) => {
+						if (e.key === "Enter") {
+							e.preventDefault();
+							handleLogin();
+						}
+					});
+				}
+
+				// 用户名框按回车聚焦到密码框
+				const usernameInput = document.getElementById(
+					"nav-login-username",
+				) as HTMLInputElement;
+				if (usernameInput) {
+					usernameInput.addEventListener("keydown", (e) => {
+						if (e.key === "Enter") {
+							e.preventDefault();
+							passwordInput?.focus();
+						}
+					});
+				}
+
+				// 密码可见/隐藏切换
+				const togglePasswordBtn = document.getElementById(
+					"toggle-password-btn",
+				);
+				const togglePasswordIcon = document.getElementById(
+					"toggle-password-icon",
+				);
+				if (togglePasswordBtn && togglePasswordIcon && passwordInput) {
+					togglePasswordBtn.addEventListener("click", () => {
+						const isPassword = passwordInput.type === "password";
+						passwordInput.type = isPassword ? "text" : "password";
+						togglePasswordIcon.setAttribute(
+							"name",
+							isPassword ? "ri:eye-off-line" : "ri:eye-line",
+						);
+					});
+				}
+
+				async function handleLogin() {
+					const username =
+						(
+							document.getElementById("nav-login-username") as HTMLInputElement
+						)?.value?.trim() ?? "";
+					const password =
+						(document.getElementById("nav-login-password") as HTMLInputElement)
+							?.value ?? "";
+					const redirectTo =
+						(
+							loginForm.querySelector(
+								'input[name="redirectTo"]',
+							) as HTMLInputElement
+						)?.value ?? "/";
+
+					if (!username || !password) {
+						showLoginError("请输入用户名和密码。");
+						return;
+					}
+
+					// 禁用提交按钮
+					loginSubmitBtn.disabled = true;
+					loginSubmitBtn.textContent = "登录中...";
+					hideLoginError();
+
+					try {
+						// 临时移除密码字段的 name 属性，防止浏览器识别为密码提交
+						const passwordInput = document.getElementById(
+							"nav-login-password",
+						) as HTMLInputElement;
+						const originalName = passwordInput?.name || "";
+						if (passwordInput) {
+							passwordInput.removeAttribute("name");
+						}
+
+						const formData = new FormData();
+						formData.append("username", username);
+						formData.append("password", password);
+						formData.append("redirectTo", redirectTo);
+
+						const response = await fetch("/api/admin/login", {
+							method: "POST",
+							body: formData,
+							credentials: "same-origin",
+						});
+
+						// 恢复密码字段的 name 属性
+						if (passwordInput) {
+							passwordInput.name = originalName;
+						}
+
+						// 处理重定向
+						if (response.redirected) {
+							const url = new URL(response.url);
+							const authStatus = url.searchParams.get("auth");
+							const errorCode = url.searchParams.get("error");
+
+							if (authStatus === "login") {
+								// 登录成功 - 允许密码保存
+								loginForm.removeAttribute("autocomplete");
+
+								// 登录成功 - 先显示通知，然后跳转（不刷新，让跳转后的页面显示通知）
+								loginModal.classList.add("hidden");
+								document.body.style.overflow = "";
+								// 直接跳转到目标 URL，保留 auth 参数以显示通知
+								window.location.href = response.url;
+								return;
+							} else if (errorCode) {
+								// 登录失败 - 禁用密码保存
+								loginForm.setAttribute("autocomplete", "off");
+								// 登录失败
+								showLoginError(getErrorMessage(errorCode));
+							} else {
+								// 未知状态，跳转
+								window.location.href = response.url;
+							}
+						} else if (response.ok) {
+							// 没有重定向但成功，刷新页面
+							window.location.reload();
+						} else {
+							showLoginError("登录失败，请稍后重试。");
+						}
+					} catch (error) {
+						console.error("登录错误:", error);
+						showLoginError("网络错误，请稍后重试。");
+					} finally {
+						loginSubmitBtn.disabled = false;
+						loginSubmitBtn.textContent = "登录";
+					}
+				}
+			}
+
+			function showLoginError(message: string) {
+				if (loginErrorMessage) {
+					loginErrorMessage.textContent = message;
+					loginErrorMessage.classList.remove("hidden");
+				}
+			}
+
+			function hideLoginError() {
+				if (loginErrorMessage) {
+					loginErrorMessage.classList.add("hidden");
+				}
+			}
+
+			function getErrorMessage(errorCode: string): string {
+				const errorMap: Record<string, string> = {
+					missing_fields: "请输入用户名和密码。",
+					user_not_found: "用户名不存在。",
+					wrong_password: "密码错误。",
+					invalid_credentials: "用户名或密码错误。",
+				};
+				return errorMap[errorCode] ?? "登录失败，请稍后重试。";
+			}
 		}
 	});
 </script>

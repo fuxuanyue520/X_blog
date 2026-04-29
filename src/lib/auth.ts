@@ -40,15 +40,20 @@ export async function authenticateAdmin(username: string, password: string) {
 	const row = result.rows[0];
 
 	if (!row) {
-		return null;
+		return { error: "user_not_found" };
 	}
 
 	const passwordHash = normalizeStoredCredential(row.password_hash);
 	const passwordSalt = normalizeStoredCredential(row.password_salt);
+	
+	if (!passwordHash || !passwordSalt) {
+		return { error: "invalid_credentials" };
+	}
+	
 	const isValid = verifyPassword(password, passwordHash, passwordSalt);
 
 	if (!isValid) {
-		return null;
+		return { error: "wrong_password" };
 	}
 
 	return {
@@ -61,25 +66,32 @@ export async function createAdminSession(userId: number) {
 	const db = await getDb();
 	const token = createSessionToken();
 	const tokenHash = hashSessionToken(token);
-	const expiresAt = new Date(Date.now() + SESSION_DURATION_MS)
-		.toISOString()
-		.replace("T", " ")
-		.substring(0, 19);
-	const createdAt = new Date().toISOString().replace("T", " ").substring(0, 19);
-	const lastActivityAt = new Date()
-		.toISOString()
-		.replace("T", " ")
-		.substring(0, 19);
+	const now = new Date();
+	const expiresAt = new Date(now.getTime() + SESSION_DURATION_MS);
+	
+	const formatDate = (date: Date) => {
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, "0");
+		const day = String(date.getDate()).padStart(2, "0");
+		const hours = String(date.getHours()).padStart(2, "0");
+		const minutes = String(date.getMinutes()).padStart(2, "0");
+		const seconds = String(date.getSeconds()).padStart(2, "0");
+		return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+	};
+
+	const expiresAtStr = formatDate(expiresAt);
+	const createdAtStr = formatDate(now);
+	const lastActivityAtStr = formatDate(now);
 
 	await db.execute({
 		sql: `
 			INSERT INTO admin_sessions (user_id, token_hash, expires_at, created_at, last_activity_at)
 			VALUES (?, ?, ?, ?, ?)
 		`,
-		args: [userId, tokenHash, expiresAt, createdAt, lastActivityAt],
+		args: [userId, tokenHash, expiresAtStr, createdAtStr, lastActivityAtStr],
 	});
 
-	return { token, expiresAt };
+	return { token, expiresAt: expiresAtStr };
 }
 
 export async function getAuthenticatedAdmin(
@@ -115,7 +127,8 @@ export async function getAuthenticatedAdmin(
 	const lastActivityAt = String(row.last_activity_at);
 
 	// 检查会话是否过期
-	if (new Date(expiresAt).getTime() <= Date.now()) {
+	const expiresAtTime = new Date(expiresAt.replace(" ", "T")).getTime();
+	if (expiresAtTime <= Date.now()) {
 		await db.execute({
 			sql: "DELETE FROM admin_sessions WHERE token_hash = ?",
 			args: [tokenHash],
@@ -125,7 +138,8 @@ export async function getAuthenticatedAdmin(
 	}
 
 	// 检查是否空闲超时（30 分钟无操作）
-	if (new Date(lastActivityAt).getTime() + IDLE_TIMEOUT_MS <= Date.now()) {
+	const lastActivityTime = new Date(lastActivityAt.replace(" ", "T")).getTime();
+	if (lastActivityTime + IDLE_TIMEOUT_MS <= Date.now()) {
 		await db.execute({
 			sql: "DELETE FROM admin_sessions WHERE token_hash = ?",
 			args: [tokenHash],
@@ -135,10 +149,16 @@ export async function getAuthenticatedAdmin(
 	}
 
 	// 更新最后活动时间
-	const newLastActivity = new Date()
-		.toISOString()
-		.replace("T", " ")
-		.substring(0, 19);
+	const formatActivityDate = (date: Date) => {
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, "0");
+		const day = String(date.getDate()).padStart(2, "0");
+		const hours = String(date.getHours()).padStart(2, "0");
+		const minutes = String(date.getMinutes()).padStart(2, "0");
+		const seconds = String(date.getSeconds()).padStart(2, "0");
+		return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+	};
+	const newLastActivity = formatActivityDate(new Date());
 	await db.execute({
 		sql: "UPDATE admin_sessions SET last_activity_at = ? WHERE token_hash = ?",
 		args: [newLastActivity, tokenHash],

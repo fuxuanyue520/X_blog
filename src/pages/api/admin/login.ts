@@ -39,17 +39,16 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 		return redirect(withLoginError(redirectTo, "missing_fields"));
 	}
 
-	const admin = await authenticateAdmin(username, password);
+	const authResult = await authenticateAdmin(username, password);
 
-	if (!admin) {
-		return redirect(withLoginError(redirectTo, "invalid_credentials"));
+	if ("error" in authResult) {
+		return redirect(withLoginError(redirectTo, authResult.error));
 	}
 
-	const session = await createAdminSession(admin.id);
+	const session = await createAdminSession(authResult.id);
 	setAdminSessionCookie(cookies, session.token, session.expiresAt);
 
-	const destination =
-		redirectTo === "/admin/login" ? "/admin" : redirectTo;
+	const destination = redirectTo === "/admin/login" ? "/admin" : redirectTo;
 	return redirect(withLoginSuccess(destination));
 };
 
