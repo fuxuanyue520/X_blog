@@ -727,69 +727,6 @@ const shouldOpenLoginModal =
 		}
 	}
 
-	// 获取登录状态
-	const checkAuthStatus = async () => {
-		try {
-			const response = await fetch("/api/admin/session", {
-				credentials: "same-origin",
-				headers: {
-					Accept: "application/json",
-					"Cache-Control": "no-cache",
-				},
-			});
-			
-			if (!response.ok) {
-				return null;
-			}
-			
-			const session = await response.json();
-			return Boolean(session?.authenticated);
-		} catch {
-			return null;
-		}
-	};
-
-	// 更新登录状态 UI
-	const updateAuthUI = (authenticated: boolean) => {
-		guestActions.forEach((element) => {
-			element.classList.toggle("hidden", authenticated);
-			if (
-				element instanceof HTMLElement &&
-				element.classList.contains("md:inline-flex")
-			) {
-				element.style.display = authenticated ? "none" : "";
-			}
-		});
-
-		if (adminDesktopLink instanceof HTMLElement) {
-			adminDesktopLink.classList.toggle("hidden", !authenticated);
-			adminDesktopLink.classList.toggle("inline-flex", authenticated);
-		}
-
-		if (adminDesktopLogout instanceof HTMLElement) {
-			adminDesktopLogout.classList.toggle("hidden", !authenticated);
-			adminDesktopLogout.classList.toggle("block", authenticated);
-		}
-
-		if (adminMobileLink instanceof HTMLElement) {
-			adminMobileLink.classList.toggle("hidden", !authenticated);
-			adminMobileLink.classList.toggle("flex", authenticated);
-		}
-
-		if (adminMobileForm instanceof HTMLElement) {
-			adminMobileForm.classList.toggle("hidden", !authenticated);
-		}
-
-		if (
-			authenticated &&
-			loginModal &&
-			!loginModal.classList.contains("hidden")
-		) {
-			loginModal.classList.add("hidden");
-			document.body.style.overflow = "";
-		}
-	};
-
 	// Runs on initial load and after every navigation
 	document.addEventListener("astro:page-load", () => {
 		mountAccountChangePasswordForm();
@@ -818,12 +755,62 @@ const shouldOpenLoginModal =
 		const adminMobileForm = document.querySelector("[data-auth-admin-form]");
 		let isMenuOpen = false;
 		
-		// 异步检查登录状态并更新 UI
-		checkAuthStatus().then((authenticated) => {
-			if (authenticated !== null) {
-				updateAuthUI(authenticated);
-			}
-		});
+		// 获取登录状态并更新 UI
+		fetch("/api/admin/session", {
+			credentials: "same-origin",
+			headers: {
+				Accept: "application/json",
+				"Cache-Control": "no-cache",
+			},
+		})
+			.then((response) => {
+				if (!response.ok) return null;
+				return response.json();
+			})
+			.then((session) => {
+				const authenticated = Boolean(session?.authenticated);
+				
+				guestActions.forEach((element) => {
+					element.classList.toggle("hidden", authenticated);
+					if (
+						element instanceof HTMLElement &&
+						element.classList.contains("md:inline-flex")
+					) {
+						element.style.display = authenticated ? "none" : "";
+					}
+				});
+
+				if (adminDesktopLink instanceof HTMLElement) {
+					adminDesktopLink.classList.toggle("hidden", !authenticated);
+					adminDesktopLink.classList.toggle("inline-flex", authenticated);
+				}
+
+				if (adminDesktopLogout instanceof HTMLElement) {
+					adminDesktopLogout.classList.toggle("hidden", !authenticated);
+					adminDesktopLogout.classList.toggle("block", authenticated);
+				}
+
+				if (adminMobileLink instanceof HTMLElement) {
+					adminMobileLink.classList.toggle("hidden", !authenticated);
+					adminMobileLink.classList.toggle("flex", authenticated);
+				}
+
+				if (adminMobileForm instanceof HTMLElement) {
+					adminMobileForm.classList.toggle("hidden", !authenticated);
+				}
+
+				if (
+					authenticated &&
+					loginModal &&
+					!loginModal.classList.contains("hidden")
+				) {
+					loginModal.classList.add("hidden");
+					document.body.style.overflow = "";
+				}
+			})
+			.catch(() => {
+				// 忽略错误
+			});
 
 		if (menuBtn && mobileMenu && menuIconOpen && menuIconClose) {
 			isMenuOpen = false;
