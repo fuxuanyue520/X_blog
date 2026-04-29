@@ -76,13 +76,13 @@ async function createDatabaseClient() {
 			password: config.password,
 			database: config.database,
 			waitForConnections: true,
-			connectionLimit: 10,
-			queueLimit: 0,
+			connectionLimit: 2,
+			queueLimit: 2,
 			charset: "utf8mb4",
 			dateStrings: true,
 			connectTimeout: 5000,
 		});
-
+		
 		try {
 			await poolClient.getConnection();
 			dbClient = new MysqlDbClient(poolClient);
