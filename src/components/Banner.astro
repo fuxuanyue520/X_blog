@@ -23,7 +23,7 @@
 			<source src="/videos/background.mp4" type="video/mp4" />
 		</video>
 		<!-- 添加半透明遮罩，让背景更柔和 -->
-		<div class="absolute inset-0 bg-dark-900/30"></div>
+		<div class="absolute inset-0 bg-dark-900/15"></div>
 	</div>
 
 	<!-- Content -->
@@ -56,10 +56,16 @@
 				console.log("视频播放失败:", err);
 			});
 		});
-		
+
 		video.addEventListener("error", () => {
 			console.log("视频加载失败，添加备用背景");
-			document.getElementById("banner-bg").classList.add("bg-gradient-to-br", "from-purple-900/40", "to-blue-900/40");
+			document
+				.getElementById("banner-bg")
+				.classList.add(
+					"bg-gradient-to-br",
+					"from-purple-900/40",
+					"to-blue-900/40",
+				);
 		});
 	}
 </script>
