@@ -1,58 +1,63 @@
 ---
+
 ---
 
-<div class="relative w-full h-[40vh] md:h-[60vh] min-h-[300px] md:min-h-[400px] overflow-hidden mt-16 lg:mt-20 group" transition:persist>
-    <!-- Background Video -->
-    <div id="banner-bg" class="absolute inset-0 transform scale-100 transition-transform duration-1000 ease-out group-hover:scale-105 will-change-transform">
-        <video
-            id="background-video"
-            class="absolute inset-0 w-full h-full object-cover"
-            autoplay
-            muted
-            loop
-            playsinline
-            preload="auto"
-            onerror="this.style.display='none'"
-        >
-            <source src="/videos/background.mp4" type="video/mp4" />
-        </video>
-        <!-- 优化渐变背景：更精致的紫色系渐变 -->
-        <div class="absolute inset-0 bg-gradient-to-br from-indigo-950/80 via-purple-900/70 to-slate-900/80"></div>
-        <!-- 添加细腻的网格纹理 -->
-        <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0); background-size: 40px 40px;"></div>
-        <!-- 底部柔和渐变 -->
-        <div class="absolute inset-0 bg-gradient-to-t from-dark-950 via-dark-950/60 to-transparent"></div>
-    </div>
-    
-    <!-- Content -->
-    <div class="absolute bottom-0 left-0 w-full p-6 md:p-10 bg-gradient-to-t from-dark-950/95 via-dark-950/40 to-transparent pt-32 z-10">
-        <div class="max-w-[1600px] mx-auto flex flex-col justify-end h-full">
-             <h1 class="text-3xl md:text-5xl font-serif font-bold text-white mb-2 drop-shadow-xl tracking-wide translate-y-4 animate-fade-in-up">
-                在学习与迷茫之间
-             </h1>
-             <p class="text-gray-200 text-base md:text-lg font-light tracking-wider flex items-center gap-3 translate-y-4 animate-fade-in-up stagger-2">
-                <span class="w-6 h-[1px] bg-primary-400 inline-block"></span>
-                探索 · 记录 · 沉淀
-             </p>
-        </div>
-    </div>
+<div
+	class="relative w-full h-[40vh] md:h-[60vh] min-h-[300px] md:min-h-[400px] overflow-hidden mt-16 lg:mt-20 group"
+	transition:persist
+>
+	<!-- Background Video -->
+	<div
+		id="banner-bg"
+		class="absolute inset-0 transform scale-100 transition-transform duration-1000 ease-out group-hover:scale-105 will-change-transform"
+	>
+		<video
+			id="background-video"
+			class="absolute inset-0 w-full h-full object-cover"
+			autoplay
+			muted
+			loop
+			playsinline
+			preload="auto"
+		>
+			<source src="/videos/background.mp4" type="video/mp4" />
+		</video>
+	</div>
+
+	<!-- Content -->
+	<div
+		class="absolute bottom-0 left-0 w-full p-6 md:p-10 bg-gradient-to-t from-dark-900 via-dark-900/80 to-transparent pt-32 z-10"
+	>
+		<div class="max-w-[1600px] mx-auto flex flex-col justify-end h-full">
+			<h1
+				class="text-3xl md:text-5xl font-serif font-bold text-white mb-2 drop-shadow-xl tracking-wide translate-y-4 animate-fade-in-up"
+			>
+				在学习与迷茫之间
+			</h1>
+			<p
+				class="text-gray-200 text-base md:text-lg font-light tracking-wider flex items-center gap-3 translate-y-4 animate-fade-in-up stagger-2"
+			>
+				<span class="w-6 h-[1px] bg-primary-400 inline-block"></span>
+				探索 · 记录 · 沉淀
+			</p>
+		</div>
+	</div>
 </div>
 
 <script>
-    // 强制播放背景视频（解决某些浏览器的自动播放限制）
-    const video = document.getElementById('background-video');
-    if (video) {
-        // Edge 浏览器可能需要用户交互才能播放
-        video.addEventListener('loadeddata', () => {
-            video.play().catch(err => {
-                console.log('视频自动播放失败，使用渐变背景:', err);
-                // 不隐藏视频，保留渐变背景
-            });
-        });
-        
-        // 如果加载失败，使用渐变背景
-        video.addEventListener('error', () => {
-            console.log('视频加载失败，使用渐变背景');
-        });
-    }
+	// 检测视频是否加载成功，失败则显示备用背景
+	const video = document.getElementById("background-video");
+	if (video) {
+		video.addEventListener("loadeddata", () => {
+			console.log("视频加载成功");
+			video.play().catch((err) => {
+				console.log("视频播放失败:", err);
+			});
+		});
+		
+		video.addEventListener("error", () => {
+			console.log("视频加载失败，添加备用背景");
+			document.getElementById("banner-bg").classList.add("bg-gradient-to-br", "from-purple-900/40", "to-blue-900/40");
+		});
+	}
 </script>
