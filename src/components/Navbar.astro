@@ -58,13 +58,11 @@ const passwordErrCopy: Record<string, { title: string; message: string }> = {
 	},
 };
 
-function resolveAuthToast():
-	| {
-			title: string;
-			message: string;
-			variant: "success" | "error";
-	  }
-	| null {
+function resolveAuthToast(): {
+	title: string;
+	message: string;
+	variant: "success" | "error";
+} | null {
 	if (authToastParam === "login" || authToastParam === "logout") {
 		const copy = loginLogoutCopy[authToastParam];
 		return copy ? { ...copy, variant: "success" as const } : null;
@@ -191,47 +189,47 @@ const shouldOpenLoginModal =
 		<div class="flex items-center gap-3">
 			<div class="hidden md:block">
 				<button
-			type="button"
-			class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition-all hover:border-primary-400 hover:text-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-			data-open-login-modal
-			data-auth-guest
-			aria-label="打开登录弹窗"
-		>
-			<Icon name="ri:user-shared-line" class="text-lg" />
-			<span>登录</span>
-		</button>
+					type="button"
+					class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition-all hover:border-primary-400 hover:text-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+					data-open-login-modal
+					data-auth-guest
+					aria-label="打开登录弹窗"
+				>
+					<Icon name="ri:user-shared-line" class="text-lg" />
+					<span>登录</span>
+				</button>
 
-		<form
-			method="POST"
-			action="/api/admin/logout"
-			class="hidden"
-			data-auth-logout-desktop
-		>
-			<input type="hidden" name="redirectTo" value={logoutRedirectTo} />
-			<button
-				type="submit"
-				class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition-all hover:border-primary-400 hover:text-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-				aria-label="退出登录"
-			>
-				<Icon name="ri:logout-box-r-line" class="text-lg" />
-				<span>退出</span>
-			</button>
-		</form>
+				<form
+					method="POST"
+					action="/api/admin/logout"
+					class="hidden"
+					data-auth-logout-desktop
+				>
+					<input type="hidden" name="redirectTo" value={logoutRedirectTo} />
+					<button
+						type="submit"
+						class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-dark-800/80 px-4 py-2 text-sm font-medium text-gray-200 transition-all hover:border-primary-400 hover:text-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+						aria-label="退出登录"
+					>
+						<Icon name="ri:logout-box-r-line" class="text-lg" />
+						<span>退出</span>
+					</button>
+				</form>
 			</div>
 
 			<button
-		id="mobile-menu-btn"
-		type="button"
-		class="md:hidden text-gray-300 hover:text-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 p-1 rounded-lg transition-all"
-		aria-label="打开菜单"
-	>
-		<Icon name="ri:menu-4-line" class="text-2xl" id="menu-icon-open" />
-		<Icon
-			name="ri:close-line"
-			class="text-2xl hidden"
-			id="menu-icon-close"
-		/>
-	</button>
+				id="mobile-menu-btn"
+				type="button"
+				class="md:hidden text-gray-300 hover:text-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 p-1 rounded-lg transition-all"
+				aria-label="打开菜单"
+			>
+				<Icon name="ri:menu-4-line" class="text-2xl" id="menu-icon-open" />
+				<Icon
+					name="ri:close-line"
+					class="text-2xl hidden"
+					id="menu-icon-close"
+				/>
+			</button>
 		</div>
 	</div>
 
@@ -313,7 +311,8 @@ const shouldOpenLoginModal =
 			data-auth-toast-title={authToastResolved.title}
 			data-auth-toast-duration={
 				authToastResolved.variant === "error" ? "4000" : "3200"
-			}>
+			}
+		>
 			{authToastResolved.message}
 		</div>
 	)
@@ -331,8 +330,9 @@ const shouldOpenLoginModal =
 		type="button"
 		class="absolute inset-0 bg-dark-950/75 backdrop-blur-sm"
 		data-close-login-modal
-		aria-label="关闭登录弹窗">
-		</button>
+		aria-label="关闭登录弹窗"
+	>
+	</button>
 
 	<div
 		class="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-dark-800/95 p-8 shadow-2xl shadow-black/40"
@@ -707,8 +707,7 @@ const shouldOpenLoginModal =
 				variant:
 					source.dataset.authToastVariant === "error" ? "error" : "success",
 				title: source.dataset.authToastTitle ?? undefined,
-				duration:
-					Number(source.dataset.authToastDuration ?? "3000") || 3000,
+				duration: Number(source.dataset.authToastDuration ?? "3000") || 3000,
 			});
 		});
 
@@ -731,7 +730,7 @@ const shouldOpenLoginModal =
 	document.addEventListener("astro:page-load", () => {
 		mountAccountChangePasswordForm();
 		initNavbarAuthToast();
-		
+
 		const menuBtn = document.getElementById("mobile-menu-btn");
 		const mobileMenu = document.getElementById("mobile-menu");
 		const menuIconOpen = document.getElementById("menu-icon-open");
@@ -754,7 +753,7 @@ const shouldOpenLoginModal =
 		const adminMobileLink = document.querySelector("[data-auth-admin-link]");
 		const adminMobileForm = document.querySelector("[data-auth-admin-form]");
 		let isMenuOpen = false;
-		
+
 		// 获取登录状态并更新 UI
 		fetch("/api/admin/session", {
 			credentials: "same-origin",
@@ -769,7 +768,7 @@ const shouldOpenLoginModal =
 			})
 			.then((session) => {
 				const authenticated = Boolean(session?.authenticated);
-				
+
 				guestActions.forEach((element) => {
 					element.classList.toggle("hidden", authenticated);
 					if (
@@ -900,71 +899,6 @@ const shouldOpenLoginModal =
 					closeModal();
 				}
 			};
-		}
-
-		// 获取登录状态
-		const checkAuthStatus = async () => {
-			try {
-				const response = await fetch("/api/admin/session", {
-					credentials: "same-origin",
-					headers: {
-						Accept: "application/json",
-						"Cache-Control": "no-cache",
-					},
-				});
-				
-				if (!response.ok) {
-					return null;
-				}
-				
-				const session = await response.json();
-				return Boolean(session?.authenticated);
-			} catch {
-				return null;
-			}
-		};
-
-		// 页面加载时检查登录状态
-		const authenticated = await checkAuthStatus();
-		
-		if (authenticated !== null) {
-			guestActions.forEach((element) => {
-				element.classList.toggle("hidden", authenticated);
-				if (
-					element instanceof HTMLElement &&
-					element.classList.contains("md:inline-flex")
-				) {
-					element.style.display = authenticated ? "none" : "";
-				}
-			});
-
-			if (adminDesktopLink instanceof HTMLElement) {
-				adminDesktopLink.classList.toggle("hidden", !authenticated);
-				adminDesktopLink.classList.toggle("inline-flex", authenticated);
-			}
-
-			if (adminDesktopLogout instanceof HTMLElement) {
-				adminDesktopLogout.classList.toggle("hidden", !authenticated);
-				adminDesktopLogout.classList.toggle("block", authenticated);
-			}
-
-			if (adminMobileLink instanceof HTMLElement) {
-				adminMobileLink.classList.toggle("hidden", !authenticated);
-				adminMobileLink.classList.toggle("flex", authenticated);
-			}
-
-			if (adminMobileForm instanceof HTMLElement) {
-				adminMobileForm.classList.toggle("hidden", !authenticated);
-			}
-
-			if (
-				authenticated &&
-				loginModal &&
-				!loginModal.classList.contains("hidden")
-			) {
-				loginModal.classList.add("hidden");
-				document.body.style.overflow = "";
-			}
 		}
 	});
 </script>
